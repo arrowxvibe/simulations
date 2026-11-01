@@ -34,7 +34,7 @@ arrow on a card opens a large live window. Sound switches on at your first key p
 |---|---|---|---|
 | MaleCNS v0.9 (`malecns_09_meta.feather`, `malecns_09_simple_edgelist.feather`) | the male fly | 3.3 GB | `python download_data.py`, then `python convert_malecns.py` (makes a 33 MB `malecns_net.npz`) |
 | FlyWire FAFB v783: `classification`, `connections_princeton`, `coordinates`, `consolidated_cell_types`, `visual_neuron_types` (`.csv.gz`) | the two female flies | 73 MB | download from FlyWire and follow its terms of use. The full release is 17 GB; only these five files are read |
-| `brain.py` (the FlyWire connectome as a GPU network, class `BatchedBrain`) | the two female flies | small | not part of this repository yet: put it in `vendor/fly-brain/` or point `FLY_BRAIN_DIR` at it |
+| `brain.py` (the FlyWire connectome as a GPU network, class `BatchedBrain`) | the two female flies | small | included in `vendor/fly-brain/` (the author's file; it builds a 70 MB cache from the FlyWire files on first use) |
 
 `python download_data.py --check` tells you what is missing. Locations can be changed with the environment variables
 `FLYWIRE_DIR`, `MALECNS_DIR` and `FLY_BRAIN_DIR` (see `config.py`); by default the code looks in `data/` and `vendor/` next to it.
@@ -55,3 +55,7 @@ python train_fly2.py                  # fit the FlyWire flies' steering readout 
 ## Credits and data terms
 FlyWire (FAFB v783) and MaleCNS (Janelia and Google Research, v0.9, released under CC-BY) are the work of their teams; cite them when you use
 their data, and check each dataset's own terms. This repository does not contain either dataset.
+
+## License
+The code in this repository is MIT licensed (see `LICENSE`), including `vendor/fly-brain/brain.py`, which is included with its author's permission.
+The FlyWire and MaleCNS datasets are not part of this repository and keep their own terms.

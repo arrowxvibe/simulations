@@ -18,7 +18,7 @@ PORT = 8771
 FPS = 25
 
 cond = threading.Condition()
-state = {"seq": 0, "frame": None, "steps_per_frame": 2}
+state = {"seq": 0, "frame": None, "steps_per_frame": 1}
 
 
 def load_genome():

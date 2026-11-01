@@ -4,6 +4,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import config; config.add_flybrain_to_path()
+os.environ.setdefault("FLYWIRE_DIR", config.FLYWIRE_DIR)    # brain.py reads the FlyWire location from here
 import numpy as np, torch
 from brain import BatchedBrain
 import flycells

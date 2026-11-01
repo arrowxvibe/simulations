@@ -35,3 +35,4 @@ C:/
 
 # datasets and outside code are fetched, not committed
 data/
+vendor/fly-brain/cache/
