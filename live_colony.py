@@ -4,6 +4,7 @@ Start:  python live_server.py      then open http://localhost:8771
 The ants start with untrained brains, so you can watch them learn in real time.
 """
 import json
+import os
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -66,8 +67,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         u = urlparse(self.path)
-        if u.path in ("/", "/v3", "/v2"):
-            body = open({"/": "live4.html", "/v3": "live3.html", "/v2": "live2.html"}[u.path], "rb").read()
+        if u.path == "/":
+            body = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "live4.html"), "rb").read()
             self.send_response(200); self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
         elif u.path == "/speed":

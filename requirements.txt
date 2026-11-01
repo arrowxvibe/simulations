@@ -1,0 +1,5 @@
+numpy>=1.26
+pandas>=2.0        # reads the FlyWire and MaleCNS tables
+matplotlib>=3.8    # only for the experiment plots (run_*.py)
+pyarrow>=15        # only to convert MaleCNS (convert_malecns.py)
+torch>=2.2         # a CUDA build, for the fly brains. The ant colony itself runs without it.

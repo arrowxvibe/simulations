@@ -1,7 +1,9 @@
 """The real FlyWire network with extra senses: smell (olfactory neurons), air movement (mechanosensory neurons),
 and read-outs of the giant-fibre escape neurons and the left/right looming detectors."""
 import sys
-sys.path.insert(0, r"C:\dev\fly-brain")
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import config; config.add_flybrain_to_path()
 import numpy as np, torch
 from brain import BatchedBrain
 import flycells
@@ -18,7 +20,7 @@ class FlyBrainX(BatchedBrain):
         self.orn_l, self.orn_r = T(orn[(side == 0) | (side == 2)]), T(orn[(side == 1) | (side == 2)])
         self.mech = T(c["mech"]); self.g_smell, self.g_mech = g_smell, g_mech
         # which looming detectors look left / right
-        D = r"C:\Fruitfly\FlyWire Brain Dataset (FAFB v783)"
+        D = config.FLYWIRE_DIR
         vt = pd.read_csv(f"{D}/visual_neuron_types.csv.gz"); cls = pd.read_csv(f"{D}/classification.csv.gz")
         idx = {r: i for i, r in enumerate(cls.root_id.values)}
         sub = vt[vt.type == "LPLC2"]

@@ -3,7 +3,8 @@ import os
 import numpy as np
 import pandas as pd
 
-D = r"C:\Fruitfly\FlyWire Brain Dataset (FAFB v783)"
+import config
+D = config.FLYWIRE_DIR
 CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cells.npz")
 
 

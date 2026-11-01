@@ -1,7 +1,7 @@
 """Shrink the MaleCNS (v0.9) connectome to a GPU-sized sparse network.
 
-Run: C:\\Fruitfly\\malecns-env\\Scripts\\python.exe -I convert_malecns.py
-Reads C:\\Fruitfly\\MaleCNS\\*.feather (read only) and writes malecns_net.npz next to this script.
+Run (needs pandas and pyarrow):  python convert_malecns.py
+Reads the two .feather files in MALECNS_DIR (see config.py; read only) and writes malecns_net.npz next to this script.
 Keeps connections with >= MIN_COUNT synapses; weight = synapse count with the sign of the predicted transmitter.
 """
 import os, sys, time
@@ -10,7 +10,9 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.feather as feather
 
-D = r"C:\Fruitfly\MaleCNS"
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import config
+D = config.MALECNS_DIR
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "malecns_net.npz")
 MIN_COUNT = 5
 SIGN = {"acetylcholine": 1.0, "glutamate": -1.0, "gaba": -1.0, "histamine": -1.0, "dopamine": 1.0, "serotonin": 1.0, "octopamine": 1.0}

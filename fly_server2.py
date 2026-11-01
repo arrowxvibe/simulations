@@ -1,6 +1,6 @@
 """Live fruit flies driven by the real FlyWire connectome (139,255 neurons on your GPU).
 
-Run: C:\\dev\\fly-brain\\.venv\\Scripts\\python.exe fly_server2.py
+Run: python fly_server2.py   (needs PyTorch with CUDA, the FlyWire data and brain.py: see README)
 In:  colony stream (berries, ants) from :8771, and POSTs from the viewer: /human (position) and /scene (trees, rocks)
 Out: SSE stream at http://localhost:8772/stream
 Each fly sees the human, other flies, ants, trees, rocks and berries through the photoreceptors, smells berries,

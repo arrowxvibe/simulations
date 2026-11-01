@@ -1,5 +1,5 @@
 """Imitation (DAgger) training of the FlyWire readout in the richer world: berries + obstacles + human + smell + escape reflex.
-Run: C:\dev\fly-brain\.venv\Scripts\python.exe train_fly2.py"""
+Run: python train_fly2.py   (BRAIN=male for the MaleCNS fly)"""
 import os, sys, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np, torch

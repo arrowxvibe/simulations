@@ -32,3 +32,6 @@ cells.npz
 
 # data that lives elsewhere on this machine
 C:/
+
+# datasets and outside code are fetched, not committed
+data/
