@@ -24,6 +24,8 @@
   #pip { position: fixed; left: 12px; bottom: 50px; display: none; border: 2px solid #20e0ff; border-radius: 6px; pointer-events: none; box-shadow: 0 0 12px rgba(32,224,255,.4); }
   #pip::after { content: 'FPV'; position: absolute; top: 4px; left: 8px; color: #20e0ff; font: 700 11px monospace; }
   #fpvhud { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); display: none; font: 13px monospace; color: #20e0ff; background: rgba(0,20,28,.55); padding: 4px 12px; border-radius: 4px; pointer-events: none; white-space: nowrap; }
+  #mapbox { position: fixed; left: 12px; bottom: 134px; background: rgba(20,17,14,.85); padding: 5px; border-radius: 8px; border: 1px solid #555; }
+  #mapbox canvas { display: block; width: 230px; height: 230px; border-radius: 4px; cursor: crosshair; margin-bottom: 4px; }
   #portals { position: fixed; left: 50%; transform: translateX(-50%); bottom: 10px; display: flex; gap: 6px; }
   .pcard { width: 132px; background: rgba(20,17,14,.88); border: 2px solid #555; border-radius: 6px; overflow: hidden; position: relative; transition: opacity .3s; }
   .pcard canvas { width: 100%; height: auto; display: block; image-rendering: pixelated; cursor: pointer; }
@@ -48,7 +50,7 @@
   Ants: <b id="pop">0</b> / room for <b id="cap">0</b> &nbsp; Chambers: <b id="ch">1</b><br>
   Born: <b id="born">0</b> &nbsp; Died: <b id="died">0</b> &nbsp; Brood: <b id="brood">0</b> &nbsp; Flies: <b id="nflies">0</b><br>
   <button id="bDuck" onclick="toggleDrive()">Play hero (T)</button><button id="bSound" onclick="toggleSound()">Sound (any key)</button><br>
-  <button id="bUnder" onclick="setUnder(!underOn, false)">Underground</button><button id="bQ" onclick="setQuality((quality + 2) % 3)">Quality: high</button><button id="bShadow" class="on" onclick="toggleShadow()">Shadows</button><button id="bPortals" class="on" onclick="portalsOn=!portalsOn;this.classList.toggle('on',portalsOn)">Portals</button><button id="bMic" onclick="toggleMic()">Talk to Microduck</button><button id="bLabels" class="on" onclick="labelsOn=!labelsOn;this.classList.toggle('on',labelsOn)">Labels</button><button id="bPip" onclick="pipOn=!pipOn;this.classList.toggle('on',pipOn)">FPV window (P)</button><button id="bDay" class="on" onclick="cycleOn=!cycleOn;this.classList.toggle('on',cycleOn)">Day/night</button><br>
+  <button id="bUnder" onclick="setUnder(!underOn, false)">Underground</button><button id="bQ" onclick="setQuality((quality + 2) % 3)">Quality: high</button><button id="bShadow" class="on" onclick="toggleShadow()">Shadows</button><button id="bPortals" class="on" onclick="portalsOn=!portalsOn;this.classList.toggle('on',portalsOn)">Portals</button><button id="bMap" class="on" onclick="mapOn=!mapOn;this.classList.toggle('on',mapOn)">Map (M)</button><button id="bMic" onclick="toggleMic()">Talk to Microduck</button><button id="bLabels" class="on" onclick="labelsOn=!labelsOn;this.classList.toggle('on',labelsOn)">Labels</button><button id="bPip" onclick="pipOn=!pipOn;this.classList.toggle('on',pipOn)">FPV window (P)</button><button id="bDay" class="on" onclick="cycleOn=!cycleOn;this.classList.toggle('on',cycleOn)">Day/night</button><br>
   Speed: <button onclick="sp(1)">1x</button><button onclick="sp(2)">2x</button><button onclick="sp(4)">4x</button><button onclick="sp(8)">8x</button><br>
   <span id="gp" style="color:#999">Gamepad: none detected (press a button on it)</span><br><span id="flyinfo" style="color:#9ad">Flies: scripted (run fly_server2.py for the real fly brain)</span>
 </div>
@@ -62,7 +64,8 @@
   Gamepad: left stick move (analog speed) &middot; right stick look &middot; A jump / hold for jetpack &middot; B dive &middot; X cheer &middot; Y or R3 first person &middot; L3/RB sprint &middot; D-pad gear &middot; Start toggle
 </div>
 <div id="pip"></div><div id="fpvhud"></div>
-<div id="micpanel" class="panel" style="display:none;left:12px;top:350px;width:290px">
+<div id="mapbox"><canvas id="minimap" width="230" height="230"></canvas><button onclick="findMicroduck()">Find Microduck</button> <span style="font-size:11px;color:#bbb">click the map to go there</span></div>
+<div id="micpanel" class="panel" style="display:none;left:262px;top:350px;width:290px">
   <b>Talk to the Microduck</b>
   <div id="micmsg" style="color:#bbb;font-size:12px">Click "Talk to Microduck" and allow the microphone. Your browser may send the audio to its speech service to turn it into text; this page records nothing. Your voice is played back from the boy's mouth, so use headphones. You can always type instead.</div>
   <div style="background:#333;height:8px;border-radius:4px;margin:6px 0"><div id="micbar" style="background:#6f6;height:8px;border-radius:4px;width:0%"></div></div>
@@ -588,7 +591,7 @@ addEventListener('keydown', e => {
   keys[e.code] = true;
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   if (e.code === 'KeyT') toggleDrive(); if (e.code === 'KeyV' && driving) toggleFPV(); if (e.code === 'KeyP') pipOn = !pipOn; if (/^Digit[1-4]$/.test(e.code)) setGear(+e.code[5] - 1);
-  if (e.code === 'KeyF') quack(); if (viewFeed && (e.code === 'KeyB' || e.code === 'Escape' || e.code === 'Backspace')) exitFeed(); if (e.code === 'BracketRight') cycleFeed(1); if (e.code === 'BracketLeft') cycleFeed(-1);
+  if (e.code === 'KeyF') quack(); if (e.code === 'KeyM') mapOn = !mapOn; if (viewFeed && (e.code === 'KeyB' || e.code === 'Escape' || e.code === 'Backspace')) exitFeed(); if (e.code === 'BracketRight') cycleFeed(1); if (e.code === 'BracketLeft') cycleFeed(-1);
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
 function resize() { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
@@ -917,6 +920,38 @@ function updateBoyTalk(dt, now) {
   boyBubble.visible = duck.say.t > 0 && labelsOn !== undefined; boyBubble.position.set(duck.g.position.x, duck.g.position.y + 5.4, duck.g.position.z); fitLabel(boyBubble);
 }
 
+// ---------- minimap ----------
+const MAPN = 230, MAPM = 16, mapCv = document.getElementById('minimap'), mapCtx = mapCv.getContext('2d'); let mapOn = true, mapN = 0;
+function mapXY(x, z) { const w = MAPN - 2 * MAPM; return [MAPM + (x + H) / (2 * H) * w, MAPM + (z + H) / (2 * H) * w]; }     // world x to the right, world z downward
+function mapWorld(px, py) { const w = MAPN - 2 * MAPM; return [(px - MAPM) / w * 2 * H - H, (py - MAPM) / w * 2 * H - H]; }
+function drawMap(now) {
+  const box = document.getElementById('mapbox'); if (!mapOn) { box.style.display = 'none'; return; } box.style.display = 'block'; if (mapN++ % 2) return;
+  const c = mapCtx, dot = (x, z, r, col, edge) => { const [px, py] = mapXY(x, z); c.beginPath(); c.arc(px, py, r, 0, 6.283); c.fillStyle = col; c.fill(); if (edge) { c.strokeStyle = edge; c.lineWidth = 1; c.stroke(); } };
+  c.clearRect(0, 0, MAPN, MAPN); c.fillStyle = '#1d6f9c'; c.fillRect(0, 0, MAPN, MAPN);                                                     // the sea
+  const [x0, y0] = mapXY(-H, -H), [x1, y1] = mapXY(H, H); c.fillStyle = '#c9b27a'; c.fillRect(x0 - 3, y0 - 3, x1 - x0 + 6, y1 - y0 + 6); c.fillStyle = '#7a5c3a'; c.fillRect(x0, y0, x1 - x0, y1 - y0);   // beach and island
+  dot(0, 0, 6, '#3b2a1c', '#d8b98a'); dot(WELL_X, WELL_Z, 4, '#2f9fc8', '#cfc8b8');                                                           // nest and well
+  srcMeshes.forEach((g, i) => dot(g.position.x, g.position.z, 2, srcKinds[i] === 'food' ? '#6fdc6f' : '#c76dff'));                             // ants' seeds and poison
+  fruitMeshes.forEach(g => { if (g.visible) dot(g.position.x, g.position.z, 3, '#ff5a4a'); });                                                // the flies' fruit
+  const cam = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion), [cx, cy] = mapXY(camera.position.x, camera.position.z), ang = Math.atan2(cam.z, cam.x);   // what the camera sees
+  c.beginPath(); c.moveTo(cx, cy); c.arc(cx, cy, 34, ang - 0.5, ang + 0.5); c.closePath(); c.fillStyle = 'rgba(255,255,255,0.18)'; c.fill();
+  for (const a of ants.values()) a.userData.queen ? dot(a.position.x, a.position.z, 4, '#ffd34d', '#fff') : dot(a.position.x, a.position.z, 2, '#1b110b', '#d8c2a8');
+  flies.forEach(f => dot(f.g.position.x, f.g.position.z, 2.5, f.kind === 'male' ? '#8fd0ff' : '#ff9aa8', '#fff'));
+  const [bx, by] = mapXY(duck.pos.x, duck.pos.z), fx = Math.cos(duck.yaw), fy = -Math.sin(duck.yaw);                                          // you: a triangle pointing the way you face
+  c.beginPath(); c.moveTo(bx + fx * 7, by + fy * 7); c.lineTo(bx - fx * 4 - fy * 4, by - fy * 4 + fx * 4); c.lineTo(bx - fx * 4 + fy * 4, by - fy * 4 - fx * 4); c.closePath(); c.fillStyle = '#4cc3ff'; c.fill(); c.strokeStyle = '#fff'; c.stroke();
+  const pulse = 8 + 3 * Math.sin(now / 180), [mx, my] = mapXY(md.pos.x, md.pos.z);                                                           // the Microduck: gold, pulsing, named
+  c.beginPath(); c.arc(mx, my, pulse, 0, 6.283); c.strokeStyle = 'rgba(255,214,77,0.9)'; c.lineWidth = 2; c.stroke(); dot(md.pos.x, md.pos.z, 4, '#ffd34d', '#fff');
+  c.font = '600 11px system-ui'; c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.lineWidth = 3; const lx = Math.min(mx + 12, MAPN - 70); c.strokeText('Microduck', lx, my + 4); c.fillText('Microduck', lx, my + 4);
+  c.strokeText('you', bx + 9, by - 6); c.fillText('you', bx + 9, by - 6);
+}
+mapCv.addEventListener('click', e => {                                                         // click the map: the boy goes there
+  const r = mapCv.getBoundingClientRect(), [wx, wz] = mapWorld((e.clientX - r.left) * MAPN / r.width, (e.clientY - r.top) * MAPN / r.height);
+  duck.pos.set(clamp(wx, -H + 3, H - 3), 0, clamp(wz, -H + 3, H - 3)); duck.pos.y = hAt(duck.pos.x, duck.pos.z); duck.vx = duck.vz = duck.vy = 0;
+});
+function findMicroduck() {                                                                      // stand next to the Microduck, facing it
+  const ox = md.pos.x + 4, oz = md.pos.z + 4; duck.pos.set(clamp(ox, -H + 3, H - 3), hAt(ox, oz), clamp(oz, -H + 3, H - 3)); duck.vx = duck.vz = duck.vy = 0;
+  const dx = md.pos.x - duck.pos.x, dz = md.pos.z - duck.pos.z; theta = Math.atan2(-dx, -dz); duck.yaw = Math.atan2(-dz, dx); phi = 0.25; dist = 6; exitFeed();
+}
+
 // ---------- portals: a live feed from every creature ----------
 const FEED_DEFS = [
   { id: 'hero', name: 'Boy (you)', color: '#8fd0ff' },
@@ -1118,7 +1153,7 @@ function render(now) {
     renderer.setScissorTest(true); renderer.setViewport(x, y, w, h); renderer.setScissor(x, y, w, h); fpvCam.aspect = w / h; fpvCam.updateProjectionMatrix();
     renderer.render(scene, fpvCam); renderer.setScissorTest(false); renderer.setViewport(0, 0, innerWidth, innerHeight);
   } else $('pip').style.display = 'none';
-  updatePortals();
+  updatePortals(); drawMap(now);
   fpsN++; if (now - fpsT > 1000) { $('fps').textContent = fpsN + ' fps'; if (fpsN < 18 && shadowOn && ++slow >= 3) { toggleShadow(); $('fps').textContent += ' (shadows auto-off)'; } else if (fpsN < 18 && !shadowOn && quality > 0 && ++slowQ >= 4) { setQuality(quality - 1); slowQ = 0; $('fps').textContent += ' (quality lowered)'; } else if (fpsN >= 18) { slow = 0; slowQ = 0; } fpsN = 0; fpsT = now; }
   requestAnimationFrame(render);
 }

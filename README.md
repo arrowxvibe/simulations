@@ -32,6 +32,8 @@ pip install -r requirements.txt # for torch choose the CUDA build from pytorch.o
 python smoke_test.py            # 4 quick checks, about 2 seconds
 python start.py                 # colony + viewer; open http://localhost:8771
 ```
+A small **map** (bottom left, **M** toggles it) shows the island with every ant, fly, food spot, you and the Microduck (a pulsing gold ring). Click the map to go there, or press *Find Microduck*.
+
 Controls: **T** play the boy, **WASD** move, **Shift** sprint, **Space** jump (hold in the air for the jetpack), **V** first person,
 **[** and **]** cycle creature feeds, **B** back. Click a portal card at the bottom to see through that creature's eyes; the small
 arrow on a card opens a large live window. Sound switches on at your first key press.
