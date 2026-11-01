@@ -751,6 +751,92 @@ function connect() {
 }
 connect();
 
+// ---------- Microduck: the open-source duck robot (Pollen Robotics and Hugging Face; its walking is trained with NVIDIA tools) ----------
+// Built from its published description: cream body, orange beak and feet, 15 motors (legs, neck, head, beak), a front camera with a REC light.
+// Shown at about 1/6 of its real size (a real one would be 125 units tall here, bigger than the island). It does its own thing:
+// waddles about, pecks and grabs small things with its beak, sits, kicks, looks around, and now and then falls over and gets back up.
+const md = { g: new THREE.Group(), servos: 0, pos: new THREE.Vector3(-30, 0, 18), yaw: 0.6, wp: new THREE.Vector3(), state: 'walk', t: 3, phase: 0, speed: 0, carry: 0, peck: 0, sit: 0, fall: 0, kick: 0, legs: [], pose: { sit: 0 } };
+{
+  const cream = new THREE.MeshStandardMaterial({ color: 0xf1e6cc, roughness: 0.45 }), belly = new THREE.MeshStandardMaterial({ color: 0xfff7e4, roughness: 0.5 });
+  const orange = new THREE.MeshStandardMaterial({ color: 0xff8a1f, roughness: 0.4 }), dark = new THREE.MeshStandardMaterial({ color: 0x2b2f38, roughness: 0.5, metalness: 0.5 });
+  const black = new THREE.MeshStandardMaterial({ color: 0x050607, roughness: 0.05, metalness: 0.4 });
+  const add = (m, par) => { m.castShadow = true; (par || md.g).add(m); return m; };
+  const servo = (par, x, y, z, axis, r) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r || 0.5, r || 0.5, 1.2, 12), dark); if (axis === 'z') m.rotation.x = PI / 2; else if (axis === 'x') m.rotation.z = PI / 2; m.position.set(x, y, z); m.castShadow = true; par.add(m); md.servos++; return m; };
+  const body = add(new THREE.Mesh(new THREE.SphereGeometry(3.2, 24, 16), cream)); body.scale.set(1.15, 1.1, 0.85); body.position.y = 7.2; md.body = body;
+  const plate = add(new THREE.Mesh(new THREE.SphereGeometry(2.6, 20, 14), belly)); plate.scale.set(1.0, 1.0, 0.7); plate.position.set(0.9, 6.7, 0);
+  const neck = new THREE.Group(); neck.position.set(1.0, 9.6, 0); md.g.add(neck); md.neck = neck;
+  add(new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.9, 1.2, 12), dark), neck).position.y = 0.2;
+  servo(neck, 0, -0.2, 0, 'z'); servo(neck, 0.4, 0.6, 0, 'y'); servo(neck, 0, 0.4, 0.7, 'x');          // three neck motors
+  const head = new THREE.Group(); head.position.set(0.5, 2.2, 0); neck.add(head); md.head = head;
+  add(new THREE.Mesh(new THREE.SphereGeometry(2.4, 24, 16), cream), head); servo(head, -0.4, -2.0, 0, 'z', 0.45);   // head motor
+  const lens = add(new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 0.5, 18), black), head); lens.rotation.z = PI / 2; lens.position.set(2.15, 0.9, 0);
+  const glass = new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 10), new THREE.MeshStandardMaterial({ color: 0x1a3f6a, roughness: 0.02, metalness: 0.3, emissive: 0x0a2a55, emissiveIntensity: 0.6 })); glass.position.set(2.45, 0.9, 0); head.add(glass);
+  md.rec = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), new THREE.MeshStandardMaterial({ color: 0xff2020, emissive: 0xff2020, emissiveIntensity: 1.5 })); md.rec.position.set(1.9, 1.85, 0.55); head.add(md.rec);   // REC light
+  [-1, 1].forEach(sd => { const e = add(new THREE.Mesh(new THREE.SphereGeometry(0.5, 14, 10), black), head); e.position.set(1.5, 0.3, sd * 1.75); });
+  md.cam = new THREE.Object3D(); md.cam.position.set(2.5, 0.9, 0); head.add(md.cam);
+  const upper = add(new THREE.Mesh(new THREE.SphereGeometry(1.2, 16, 12), orange), head); upper.scale.set(1.5, 0.42, 0.95); upper.position.set(2.5, -0.7, 0);
+  const jaw = new THREE.Group(); jaw.position.set(1.2, -1.15, 0); head.add(jaw); md.jaw = jaw;
+  const low = add(new THREE.Mesh(new THREE.SphereGeometry(1.1, 16, 12), new THREE.MeshStandardMaterial({ color: 0xe67410, roughness: 0.4 })), jaw); low.scale.set(1.4, 0.3, 0.85); low.position.set(1.2, 0, 0); servo(jaw, 0, 0.1, 0, 'z', 0.32);   // beak motor
+  md.seed = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 6), new THREE.MeshStandardMaterial({ color: 0xc9a066 })); md.seed.scale.set(1.5, 0.8, 0.8); md.seed.position.set(2.5, -1.5, 0); md.seed.visible = false; head.add(md.seed);
+  [-1, 1].forEach(sd => {                                                              // two legs, five motors each
+    const hip = new THREE.Group(); hip.position.set(0, 5.0, sd * 1.5); md.g.add(hip);
+    servo(hip, 0, 0, 0, 'z', 0.55); servo(hip, 0.3, 0.7, sd * 0.2, 'y', 0.4); servo(hip, 0.5, 0, sd * 0.6, 'x', 0.35);
+    add(new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.36, 2.6, 10), cream), hip).position.y = -1.3;
+    const knee = new THREE.Group(); knee.position.y = -2.6; hip.add(knee); servo(knee, 0, 0, 0, 'z', 0.45);
+    add(new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.3, 2.4, 10), orange), knee).position.y = -1.2;
+    const ank = new THREE.Group(); ank.position.y = -2.4; knee.add(ank); servo(ank, 0, 0, 0, 'z', 0.35);
+    const foot = add(new THREE.Mesh(new THREE.SphereGeometry(1.1, 14, 10), orange), ank); foot.scale.set(1.5, 0.22, 0.95); foot.position.set(0.6, -0.15, 0);
+    md.legs.push({ hip, knee, ank, sd });
+  });
+  md.g.add(md.cam.clone()); md.label = makeLabel('Microduck (Pollen Robotics + Hugging Face)', '#ffe0b0');
+  md.g.scale.setScalar(1.7); md.g.position.copy(md.pos); scene.add(md.g);
+}
+function mdPick() { const lim = H - 16; md.wp.set((rnd() - 0.5) * 2 * lim, 0, (rnd() - 0.5) * 2 * lim); }
+mdPick();
+function duckVoice() {   // the Microduck makes sounds of its own: two short rising chirps
+  if (!soundOn || !AC) return; const v = vol(md.g.position) * 0.12; if (v < 0.004) return;
+  [[0, 640, 980], [0.11, 720, 1100]].forEach(([dl, f0, f1]) => { const t = AC.currentTime + dl, o = AC.createOscillator(), gn = AC.createGain(); o.type = 'triangle'; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + 0.07); gn.gain.setValueAtTime(0.0001, t); gn.gain.exponentialRampToValueAtTime(v, t + 0.01); gn.gain.exponentialRampToValueAtTime(0.0001, t + 0.09); o.connect(gn); gn.connect(master); o.start(t); o.stop(t + 0.1); });
+}
+function updateMicroduck(dt, now) {
+  const L = (a, b, k) => a + (b - a) * Math.min(1, k * dt), t = now / 1000; md.t -= dt;
+  const st = md.state;
+  if (st === 'walk') {
+    const d = new THREE.Vector3().subVectors(md.wp, md.pos); d.y = 0; const dist = d.length(), want = Math.atan2(-d.z, d.x);
+    md.yaw = angLerp(md.yaw, want, Math.min(1, dt * 2.2)); const turn = Math.abs(((want - md.yaw + PI) % (2 * PI)) - PI);
+    md.speed = L(md.speed, turn > 0.9 ? 0.5 : 5.5, 4); md.pos.x += Math.cos(md.yaw) * md.speed * dt; md.pos.z -= Math.sin(md.yaw) * md.speed * dt;
+    if (dist < 2 || md.t <= 0) { md.state = 'choose'; }
+  } else md.speed = L(md.speed, 0, 6);
+  if (md.state === 'choose') {
+    const r = Math.random(); md.speed = 0;
+    if (r < 0.34) { md.state = 'peck'; md.t = 3.4; md.peck = 0; } else if (r < 0.52) { md.state = 'look'; md.t = 3; } else if (r < 0.66) { md.state = 'sit'; md.t = 3.2; }
+    else if (r < 0.76) { md.state = 'kick'; md.t = 1.6; } else if (r < 0.82) { md.state = 'fall'; md.t = 4.2; duckVoice(); } else { md.state = 'walk'; mdPick(); md.t = 12; }
+  }
+  if (st !== md.state && md.state === 'walk') duckVoice();
+  if (md.state === 'peck' && md.t < 0) { if (md.carry === 0 && Math.random() < 0.7) md.carry = 1; md.state = 'walk'; mdPick(); md.t = 12; }
+  if (['look', 'sit', 'kick', 'fall'].includes(md.state) && md.t <= 0) { md.state = 'walk'; mdPick(); md.t = 12; if (md.carry && Math.random() < 0.5) md.carry = 0; }
+  md.phase += md.speed * dt * 1.5; const walk = clamp(md.speed / 4, 0, 1);
+  // pose targets
+  const pk = md.state === 'peck' ? Math.max(0, Math.sin(t * 7)) : 0; if (md.state === 'peck' && pk > 0.95) { if (!md.pecked) { duckVoice(); md.pecked = true; } } else md.pecked = false;
+  md.sit = L(md.sit, md.state === 'sit' ? 1 : 0, 5); md.kick = md.state === 'kick' ? Math.sin(clamp((1.6 - md.t) / 1.6, 0, 1) * PI * 2) : 0;
+  const fallK = md.state === 'fall' ? clamp((4.2 - md.t) / 0.7, 0, 1) * (1 - clamp((1.0 - md.t) / 1.0, 0, 1)) : 0; md.fall = L(md.fall, fallK, 10);
+  md.legs.forEach(l => {
+    const ph = md.phase + (l.sd > 0 ? PI : 0); let sw = Math.sin(ph) * 0.55 * walk, bend = Math.max(0, Math.cos(ph)) * 0.7 * walk;
+    if (l.sd > 0 && md.kick) { sw += md.kick * 1.1; bend += Math.abs(md.kick) * 0.4; }
+    sw = L(sw, 1.3, 1) * md.sit + sw * (1 - md.sit); bend = bend * (1 - md.sit) + 1.7 * md.sit;
+    if (md.fall > 0.2) { sw += Math.sin(t * 14 + l.sd) * 0.5 * md.fall; bend += 0.5 * md.fall; }
+    l.hip.rotation.z = sw; l.knee.rotation.z = -bend; l.ank.rotation.z = -(sw - bend);
+  });
+  const roll = Math.sin(md.phase) * 0.13 * walk;                                       // the waddle
+  md.g.rotation.set(md.fall * 1.45 + roll, md.yaw, 0, 'YXZ'); md.g.rotation.x = md.fall * 1.45 + roll;
+  md.g.position.set(md.pos.x, hAt(md.pos.x, md.pos.z) + Math.abs(Math.sin(md.phase)) * 0.15 * walk - 3.2 * md.sit * 1.0 + 3.4 * md.fall, md.pos.z);
+  const nk = L(md.neck.rotation.z, -1.0 * pk - 0.1 * md.sit + Math.sin(md.phase * 2) * 0.06 * walk, 12); md.neck.rotation.z = nk;
+  md.head.rotation.y = md.state === 'look' ? Math.sin(t * 1.6) * 1.0 : L(md.head.rotation.y, Math.sin(md.phase) * 0.08 * walk, 6);
+  md.head.rotation.z = L(md.head.rotation.z, -0.6 * pk, 12);
+  const open = md.state === 'peck' ? (pk > 0.2 && pk < 0.9 ? 0.55 : 0.0) : (md.carry ? 0.0 : 0.05 + 0.04 * Math.sin(t * 3)); md.jaw.rotation.z = L(md.jaw.rotation.z, -open, 14);
+  md.seed.visible = !!md.carry; md.rec.material.emissiveIntensity = 0.6 + 1.2 * (Math.sin(t * 3) > 0 ? 1 : 0);
+  md.label.visible = labelsOn; md.label.position.set(md.g.position.x, md.g.position.y + 25, md.g.position.z); fitLabel(md.label);
+}
+
 // ---------- portals: a live feed from every creature ----------
 const FEED_DEFS = [
   { id: 'hero', name: 'Boy (you)', color: '#8fd0ff' },
@@ -760,6 +846,7 @@ const FEED_DEFS = [
   { id: 'q', name: 'Queen ant', ant: 'queen', color: '#ffd34d' },
   { id: 'w0', name: 'Worker ant A', ant: 'worker', idx: 0, color: '#d8c2a8' },
   { id: 'w1', name: 'Worker ant B', ant: 'worker', idx: 1, color: '#d8c2a8' },
+  { id: 'md', name: 'Microduck', md: true, color: '#ffe0b0' },
 ];
 const TW = 132, TH = 91, BW = 512, BH = 352;
 const thumbRT = new THREE.WebGLRenderTarget(TW, TH, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
@@ -788,6 +875,7 @@ function feedPose(def) {
     const dir = new THREE.Vector3(Math.cos(duck.yaw), 0, -Math.sin(duck.yaw)); if (driving) dir.set(-Math.sin(theta) * Math.cos(phi), -Math.sin(phi), -Math.cos(theta) * Math.cos(phi));
     return { pos: eye, dir, fov: 85 };
   }
+  if (def.md) { md.g.updateMatrixWorld(true); const pos = new THREE.Vector3(), q = new THREE.Quaternion(); md.cam.getWorldPosition(pos); md.cam.getWorldQuaternion(q); return { pos, dir: new THREE.Vector3(1, 0, 0).applyQuaternion(q), fov: 90 }; }
   const o = feedObj(def); if (!o) return null;
   if (def.fly !== undefined) {
     o.g.updateMatrixWorld(true); const head = o.g.localToWorld(new THREE.Vector3(0.62, 0.02, 0));
@@ -917,7 +1005,7 @@ function render(now) {
     });
     latest.s.forEach((s, m) => { const g = srcMeshes[m]; if (g) g.position.set(s[1] - H, hAt(s[1] - H, s[2] - H), s[2] - H); });
   }
-  updateFlies(dt, now); updateDuck(dt, pad);
+  updateFlies(dt, now); updateDuck(dt, pad); updateMicroduck(dt, now);
   if (soundOn) { let dm = 99; flies.forEach(f => { if (!f.landed) dm = Math.min(dm, f.pos.distanceTo(camera.position)); }); humGain.gain.value = 0.07 * Math.pow(clamp(1 - dm / 26, 0, 1), 2); humOsc.frequency.value = 200 + 12 * Math.sin(now / 400); }
   if (soundOn && motorGain) { motorGain.gain.value = 0.07 * duck.thrust + 0.008 * clamp(duck.speed / 20, 0, 1); motorOsc.frequency.value = 62 + duck.thrust * 70; jetGain.gain.value = 0.14 * duck.thrust; }
   motes.position.x = Math.sin(now / 5000) * 1.5; motes.rotation.y += dt * 0.01;

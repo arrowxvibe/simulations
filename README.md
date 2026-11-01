@@ -15,6 +15,10 @@ and a boy with a jetpack you can play. Everything runs live and streams to a 3D 
   cord). Vision, smell and air movement go into the real sensory neurons, and the escape from the human is driven by the real
   giant-fibre neurons (DNp01). A linear steering readout is trained by imitation (`train_fly2.py`); it steers poorly in clutter,
   so the flies flee well but rarely find food.
+- **The Microduck** (Pollen Robotics and Hugging Face's open-source duck robot, trained with NVIDIA tools) wanders the island: it waddles, pecks and grabs
+  small things with its beak, sits, kicks, looks around, and sometimes falls over and gets back up. It is a model built from the published description
+  (cream body, orange beak and feet, 15 motors, a front camera with a REC light) at about 1/6 of its real size, and its motion is scripted, not
+  the trained walking policy.
 - Known weak spots: the ant colony's workers still die young in this world, ant vision has a safety/food trade-off, and the fly brains
   forage badly. The `run_*.py` scripts reproduce the experiments behind these statements.
 
