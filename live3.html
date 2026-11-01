@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live Ant Colony 3D</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #9fb8c8; overflow: hidden; font-family: system-ui, sans-serif; color: #eee; }
+  canvas { display: block; }
+  .panel { position: fixed; background: rgba(20,17,14,.82); padding: 10px 12px; border-radius: 8px; font-size: 13px; line-height: 1.5; }
+  #info { top: 12px; left: 12px; }
+  #side { top: 12px; right: 12px; width: 330px; max-height: calc(100% - 24px); overflow: auto; }
+  #side table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  #side td, #side th { padding: 2px 4px; text-align: right; }
+  #side th:first-child, #side td:first-child, #side th:nth-child(2), #side td:nth-child(2) { text-align: left; }
+  #side th { color: #aaa; font-weight: 500; }
+  #side tr.row { cursor: pointer; } #side tr.row:hover, #side tr.sel { background: rgba(255,255,255,.12); }
+  #log div { color: #ccc; font-size: 12px; border-top: 1px solid #332b24; padding: 2px 0; }
+  #status { position: fixed; bottom: 12px; left: 12px; padding: 6px 10px; border-radius: 6px; background: rgba(20,17,14,.82); font-size: 13px; }
+  button { background: #3a322a; color: #eee; border: 0; padding: 4px 10px; border-radius: 6px; cursor: pointer; margin-right: 2px; }
+  button.on { background: #6b5a3a; }
+  .s0 { color: #9ad; } .s1 { color: #fa4; } .s2 { color: #f88; } .s3, .s4 { color: #c9a26b; } .s5 { color: #ffd34d; }
+  @media (max-width: 700px) { #side { width: 230px; font-size: 11px; } }
+</style>
+</head>
+<body>
+<div id="info" class="panel">
+  <b>Live ant colony</b> &nbsp;<span id="fps" style="color:#999"></span><br>
+  Food in store: <b id="store">0</b> &nbsp; Delivered: <b id="deliv">0</b><br>
+  Ants: <b id="pop">0</b> / room for <b id="cap">0</b> &nbsp; Chambers: <b id="ch">1</b><br>
+  Born: <b id="born">0</b> &nbsp; Died: <b id="died">0</b> &nbsp; Brood: <b id="brood">0</b><br>
+  Berries = food, red mushrooms = poison<br>
+  View: <button id="bUnder" onclick="toggleUnder()">Underground</button><button id="bShadow" class="on" onclick="toggleShadow()">Shadows</button><button onclick="followId=null;target.set(0,0,0)">Reset</button><br>
+  Speed: <button onclick="sp(1)">1x</button><button onclick="sp(2)">2x</button><button onclick="sp(4)">4x</button><button onclick="sp(8)">8x</button><br>
+  <span style="color:#999">Drag rotate, wheel zoom, click an ant in the list to follow it</span>
+</div>
+<div id="side" class="panel">
+  <b>Ants</b>
+  <table><thead><tr><th>Ant</th><th>Doing</th><th>Fed</th><th>Food mem</th><th>Energy</th></tr></thead><tbody id="rows"></tbody></table>
+  <b>Events</b><div id="log"></div>
+</div>
+<div id="status">Connecting...</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const A = 50, H = 25, NEST = [25, 25];
+const STATE = ['foraging', 'carrying food', 'going to eat', 'fetching soil', 'building', 'queen'];
+const $ = id => document.getElementById(id);
+let seedv = 12345; const rnd = () => (seedv = (seedv * 16807) % 2147483647) / 2147483647;
+const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+// sky
+{
+  const c = document.createElement('canvas'); c.width = 2; c.height = 256; const x = c.getContext('2d');
+  const g = x.createLinearGradient(0, 0, 0, 256); g.addColorStop(0, '#5e97d6'); g.addColorStop(0.7, '#bcd6e6'); g.addColorStop(1, '#e3ecdd');
+  x.fillStyle = g; x.fillRect(0, 0, 2, 256); const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; scene.background = t;
+}
+scene.fog = new THREE.Fog(0xcfe0e6, 90, 260);
+const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 600);
+scene.add(new THREE.HemisphereLight(0xdcecff, 0x4a3a28, 0.75));
+const sun = new THREE.DirectionalLight(0xfff0d0, 1.15); sun.position.set(40, 70, 25); sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024); Object.assign(sun.shadow.camera, { left: -42, right: 42, top: 42, bottom: -42, near: 10, far: 200 });
+sun.shadow.bias = -0.0005; scene.add(sun);
+
+// ---------- terrain ----------
+function hAt(x, z) {
+  const r = Math.max(Math.abs(x), Math.abs(z));
+  return smooth(27, 58, r) * (7 + 4 * Math.sin(x * 0.13) * Math.cos(z * 0.11) + 2 * Math.sin(x * 0.31 + z * 0.27));
+}
+function soilTexture(w, base, grain) {
+  const c = document.createElement('canvas'); c.width = c.height = w; const x = c.getContext('2d');
+  x.fillStyle = base; x.fillRect(0, 0, w, w);
+  const img = x.getImageData(0, 0, w, w);
+  for (let i = 0; i < w * w; i++) { const n = (rnd() - 0.5) * grain; img.data[i * 4] += n; img.data[i * 4 + 1] += n * 0.85; img.data[i * 4 + 2] += n * 0.7; }
+  x.putImageData(img, 0, 0);
+  for (let i = 0; i < w * 1.2; i++) {  // pebbles and darker clumps
+    const px = rnd() * w, py = rnd() * w, r = 1 + rnd() * 4, v = rnd();
+    x.fillStyle = v < 0.5 ? `rgba(40,28,18,${0.15 + rnd() * 0.25})` : `rgba(190,165,130,${0.12 + rnd() * 0.2})`;
+    x.beginPath(); x.ellipse(px, py, r, r * (0.6 + rnd() * 0.5), rnd() * 3, 0, 6.3); x.fill();
+  }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; return t;
+}
+const soilMap = soilTexture(512, '#6e5236', 38); soilMap.encoding = THREE.sRGBEncoding; soilMap.repeat.set(26, 26);
+const soilBump = soilTexture(256, '#808080', 90); soilBump.repeat.set(26, 26);
+const terrainGeo = new THREE.PlaneGeometry(220, 220, 110, 110); terrainGeo.rotateX(-Math.PI / 2);
+{
+  const p = terrainGeo.attributes.position, col = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), z = p.getZ(i), y = hAt(x, z); p.setY(i, y);
+    const r = Math.max(Math.abs(x), Math.abs(z)), m = smooth(27, 45, r), n = 0.85 + 0.3 * Math.sin(x * 0.7) * Math.cos(z * 0.6);
+    col[i * 3] = (1 - m * 0.55) * n; col[i * 3 + 1] = (1 - m * 0.2) * n; col[i * 3 + 2] = (1 - m * 0.6) * n;
+  }
+  terrainGeo.setAttribute('color', new THREE.BufferAttribute(col, 3)); terrainGeo.computeVertexNormals();
+}
+const terrainMat = new THREE.MeshStandardMaterial({ map: soilMap, bumpMap: soilBump, bumpScale: 2.2, roughness: 1, vertexColors: true });
+const terrain = new THREE.Mesh(terrainGeo, terrainMat); terrain.receiveShadow = true; scene.add(terrain);
+
+// pheromone overlay
+const pc = document.createElement('canvas'); pc.width = pc.height = A;
+const pctx = pc.getContext('2d'), pimg = pctx.createImageData(A, A);
+const ptex = new THREE.CanvasTexture(pc); ptex.magFilter = THREE.LinearFilter;
+const pher = new THREE.Mesh(new THREE.PlaneGeometry(A, A), new THREE.MeshBasicMaterial({ map: ptex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+pher.rotation.x = -Math.PI / 2; pher.position.y = 0.05; scene.add(pher);
+
+// ---------- vegetation, rocks ----------
+const dummy = new THREE.Object3D();
+const surface = new THREE.Group(); scene.add(surface);   // hidden in underground view
+{ // grass
+  const geo = new THREE.ConeGeometry(0.07, 0.55, 3); geo.translate(0, 0.27, 0);
+  const N = 5200, grass = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ roughness: 0.9 }), N);
+  const c = new THREE.Color();
+  for (let i = 0; i < N; i++) {
+    let x, z; do { const wide = i > N * 0.45; const s = wide ? 80 : 29; x = (rnd() - 0.5) * 2 * s; z = (rnd() - 0.5) * 2 * s; } while (Math.hypot(x, z) < 6.5 && i > 0);
+    const sc = 0.6 + rnd() * 1.1; dummy.position.set(x, hAt(x, z), z); dummy.rotation.set((rnd() - 0.5) * 0.5, rnd() * 6, (rnd() - 0.5) * 0.5);
+    dummy.scale.set(sc, sc * (0.8 + rnd() * 0.8), sc); dummy.updateMatrix(); grass.setMatrixAt(i, dummy.matrix);
+    c.setHSL(0.22 + rnd() * 0.08, 0.5 + rnd() * 0.2, 0.22 + rnd() * 0.16); grass.setColorAt(i, c);
+  }
+  grass.castShadow = false; surface.add(grass);
+}
+{ // leaf litter
+  const geo = new THREE.CircleGeometry(0.28, 7); geo.rotateX(-Math.PI / 2);
+  const N = 700, leaves = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ roughness: 1, side: THREE.DoubleSide }), N), c = new THREE.Color();
+  for (let i = 0; i < N; i++) {
+    const x = (rnd() - 0.5) * 100, z = (rnd() - 0.5) * 100;
+    dummy.position.set(x, hAt(x, z) + 0.03 + rnd() * 0.03, z); dummy.rotation.set(0, rnd() * 6, 0); dummy.scale.set(0.8 + rnd(), 1, 0.5 + rnd() * 0.7);
+    dummy.updateMatrix(); leaves.setMatrixAt(i, dummy.matrix); c.setHSL(0.06 + rnd() * 0.07, 0.6, 0.2 + rnd() * 0.2); leaves.setColorAt(i, c);
+  }
+  leaves.receiveShadow = true; surface.add(leaves);
+}
+{ // boundary rocks
+  const N = 190, rocks = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), new THREE.MeshStandardMaterial({ roughness: 0.95, flatShading: true }), N), c = new THREE.Color();
+  for (let i = 0; i < N; i++) {
+    const t = i / N * 4, side = Math.floor(t), u = (t - side) * A - H;
+    const pos = [[u, -H - 1], [H + 1, u], [-u, H + 1], [-H - 1, -u]][side];
+    const s = 0.5 + rnd() * 0.9; dummy.position.set(pos[0] + (rnd() - 0.5), s * 0.4, pos[1] + (rnd() - 0.5)); dummy.rotation.set(rnd() * 3, rnd() * 3, rnd() * 3);
+    dummy.scale.set(s * 1.3, s * 0.8, s); dummy.updateMatrix(); rocks.setMatrixAt(i, dummy.matrix); c.setHSL(0.08, 0.08, 0.3 + rnd() * 0.2); rocks.setColorAt(i, c);
+  }
+  rocks.castShadow = rocks.receiveShadow = true; scene.add(rocks);
+}
+{ // trees
+  const bark = new THREE.MeshStandardMaterial({ color: 0x4a3524, roughness: 1 });
+  const leafMats = [0x2f5d2a, 0x3a6e30, 0x27502a].map(c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.9, flatShading: true }));
+  for (let i = 0; i < 46; i++) {
+    const a = rnd() * 6.283, r = 38 + rnd() * 40, x = Math.cos(a) * r, z = Math.sin(a) * r;
+    if (Math.max(Math.abs(x), Math.abs(z)) < 34) continue;
+    const h = 9 + rnd() * 9, t = new THREE.Group();
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.45 + rnd() * 0.2, 0.9 + rnd() * 0.4, h, 8), bark); trunk.position.y = h / 2; trunk.castShadow = true; t.add(trunk);
+    for (let k = 0; k < 4; k++) {
+      const cr = 3.2 + rnd() * 2.2, cn = new THREE.Mesh(new THREE.IcosahedronGeometry(cr, 1), leafMats[k % 3]);
+      cn.position.set((rnd() - 0.5) * 3, h * (0.75 + k * 0.1), (rnd() - 0.5) * 3); cn.scale.y = 0.8; cn.castShadow = true; t.add(cn);
+    }
+    t.position.set(x, hAt(x, z) - 0.5, z); scene.add(t);
+  }
+}
+
+// ---------- nest ----------
+const clay = new THREE.MeshStandardMaterial({ color: 0x8a6a48, roughness: 1, map: soilMap });
+const nestGroup = new THREE.Group(); nestGroup.position.set(NEST[0] - H, 0, NEST[1] - H); scene.add(nestGroup);
+{
+  const prof = [[0.9, -0.5], [1.15, 0.2], [1.8, 0.62], [2.8, 0.45], [3.8, 0.12], [4.6, 0]].map(p => new THREE.Vector2(p[0], p[1]));
+  const m = new THREE.Mesh(new THREE.LatheGeometry(prof, 36), new THREE.MeshStandardMaterial({ color: 0x9a7a55, roughness: 1, map: soilMap, bumpMap: soilBump, bumpScale: 3, side: THREE.DoubleSide }));
+  m.castShadow = m.receiveShadow = true; nestGroup.add(m); window.mound = m;
+  const hole = new THREE.Mesh(new THREE.CircleGeometry(0.95, 20), new THREE.MeshBasicMaterial({ color: 0x050302 })); hole.rotation.x = -Math.PI / 2; hole.position.y = -0.45; nestGroup.add(hole);
+}
+const clodGeo = new THREE.DodecahedronGeometry(0.42, 0); let clods = [];
+
+// underground cutaway
+const under = new THREE.Group(); under.visible = false; nestGroup.add(under);
+const tunnelMat = new THREE.MeshStandardMaterial({ color: 0x3a2818, roughness: 1, side: THREE.BackSide });
+function tube(a, b, r) {
+  const d = new THREE.Vector3().subVectors(b, a), m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 1, 10, 1, true), tunnelMat);
+  m.position.copy(a).addScaledVector(d, 0.5); m.scale.y = d.length(); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); return m;
+}
+const chamberMeshes = [];
+{
+  under.add(tube(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, -5, 0), 0.6));
+  for (let k = 0; k < 6; k++) {
+    const g = new THREE.Group(), a = k * 1.05 + 0.3, c = k === 0 ? new THREE.Vector3(0, -5.4, 0) : new THREE.Vector3(Math.cos(a) * 5.5, -4.6 - (k % 2) * 1.6, Math.sin(a) * 5.5);
+    const room = new THREE.Mesh(new THREE.SphereGeometry(k === 0 ? 2.7 : 1.9, 20, 12), tunnelMat); room.scale.y = 0.5; room.position.copy(c); g.add(room);
+    if (k) g.add(tube(new THREE.Vector3(0, -4.6, 0), c, 0.4));
+    g.visible = k === 0; chamberMeshes.push(g); under.add(g);
+  }
+}
+const broodMeshes = [], broodCols = [0xf4efe0, 0xe6d6a0, 0xb99a80], broodR = [0.2, 0.3, 0.34];
+
+// ---------- food and poison ----------
+const berryGeo = new THREE.SphereGeometry(0.28, 12, 10), berryMat = new THREE.MeshStandardMaterial({ color: 0xc41e3a, roughness: 0.25, emissive: 0x2a0008 });
+const leafGeo = new THREE.CircleGeometry(1.5, 9); leafGeo.rotateX(-Math.PI / 2);
+function makeFood(idx) {
+  const g = new THREE.Group(), leaf = new THREE.Mesh(leafGeo, new THREE.MeshStandardMaterial({ color: 0x3f7a35, roughness: 0.8, side: THREE.DoubleSide })); leaf.position.y = 0.06; leaf.receiveShadow = true; g.add(leaf);
+  g.userData.berries = [];
+  for (let i = 0; i < 15; i++) {
+    const b = new THREE.Mesh(berryGeo, berryMat), r = Math.sqrt(i / 15) * 1.0, a = i * 2.4 + idx;
+    b.position.set(Math.cos(a) * r, 0.27 + (i > 9 ? 0.35 : i > 4 ? 0.18 : 0), Math.sin(a) * r); b.castShadow = true; g.add(b); g.userData.berries.push(b);
+  }
+  scene.add(g); return g;
+}
+function makePoison(idx) {
+  const g = new THREE.Group(), stem = new THREE.MeshStandardMaterial({ color: 0xece4d4, roughness: 0.8 }), cap = new THREE.MeshStandardMaterial({ color: 0xc8261e, roughness: 0.5 }), dot = new THREE.MeshStandardMaterial({ color: 0xffffff });
+  [[0, 0, 1], [0.9, 0.5, 0.65], [-0.6, 0.8, 0.5]].forEach(([x, z, s]) => {
+    const m = new THREE.Group(); const st = new THREE.Mesh(new THREE.CylinderGeometry(0.16 * s, 0.22 * s, 1.0 * s, 10), stem); st.position.y = 0.5 * s; m.add(st);
+    const cp = new THREE.Mesh(new THREE.SphereGeometry(0.62 * s, 16, 8, 0, 6.283, 0, 1.45), cap); cp.position.y = 0.95 * s; m.add(cp);
+    for (let i = 0; i < 6; i++) { const d = new THREE.Mesh(new THREE.SphereGeometry(0.07 * s, 6, 5), dot), a = i * 1.1 + idx, e = 0.35 + (i % 3) * 0.2; d.position.set(Math.cos(a) * 0.5 * s * Math.cos(e), 0.95 * s + Math.sin(e + 0.5) * 0.45 * s, Math.sin(a) * 0.5 * s * Math.cos(e)); m.add(d); }
+    m.position.set(x, 0, z); m.traverse(o => o.castShadow = true); g.add(m);
+  });
+  scene.add(g); return g;
+}
+let srcMeshes = [];
+
+// ---------- ants ----------
+const L1 = 0.8, L2 = 0.9, up = new THREE.Vector3(0, 1, 0);
+const antMat = new THREE.MeshStandardMaterial({ color: 0x2a1610, roughness: 0.32, metalness: 0.1 });
+const queenMat = new THREE.MeshStandardMaterial({ color: 0x4d2a14, roughness: 0.35 });
+const eyeMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.1, metalness: 0.4 });
+const unitCyl = new THREE.CylinderGeometry(0.5, 0.35, 1, 6);
+function limb(mat, r) { const m = new THREE.Mesh(unitCyl, mat); m.userData.r = r; return m; }
+function place(m, a, b) {
+  const d = new THREE.Vector3().subVectors(b, a), len = d.length();
+  m.position.copy(a).addScaledVector(d, 0.5); m.scale.set(m.userData.r * 2, Math.max(len, 0.001), m.userData.r * 2); m.quaternion.setFromUnitVectors(up, d.divideScalar(len || 1));
+}
+function makeAnt(queen) {
+  const g = new THREE.Group(), mat = queen ? queenMat : antMat, body = new THREE.Group(); g.add(body);
+  const S = (r, sx, sy, sz, x, y, m) => { const s = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), m || mat); s.scale.set(sx, sy, sz); s.position.set(x, y, 0); s.castShadow = true; body.add(s); return s; };
+  const gaster = S(0.44, queen ? 2.3 : 1.45, 1, 1.0, queen ? -1.45 : -1.2, 0.66);
+  S(0.12, 1, 1, 1, -0.64, 0.64);                       // petiole
+  S(0.3, 1.6, 1, 0.9, -0.12, 0.7);                     // thorax
+  const head = new THREE.Group(); head.position.set(0.62, 0.64, 0); body.add(head);
+  const hm = new THREE.Mesh(new THREE.SphereGeometry(0.3, 14, 10), mat); hm.scale.set(1.15, 0.95, 1.05); hm.castShadow = true; head.add(hm);
+  [-1, 1].forEach(s => { const e = new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 6), eyeMat); e.position.set(0.1, 0.1, s * 0.27); head.add(e); });
+  const mands = [-1, 1].map(s => { const m = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.34, 5), mat); m.geometry.translate(0, 0.17, 0); m.rotation.z = -Math.PI / 2; const p = new THREE.Group(); p.position.set(0.3, -0.08, s * 0.1); p.add(m); p.userData.s = s; head.add(p); return p; });
+  const ants = [-1, 1].map(s => {
+    const base = new THREE.Group(); base.position.set(0.25, 0.2, s * 0.14); head.add(base);
+    const scape = new THREE.Mesh(unitCyl, mat); scape.scale.set(0.05, 0.5, 0.05); scape.position.set(0.16, 0.14, 0); scape.rotation.z = -1.0; base.add(scape);
+    const elbow = new THREE.Group(); elbow.position.set(0.32, 0.28, 0); base.add(elbow);
+    const fun = new THREE.Mesh(unitCyl, mat); fun.scale.set(0.035, 0.65, 0.035); fun.position.set(0.3, 0.1, 0); fun.rotation.z = -1.25; elbow.add(fun); base.userData = { s, elbow }; return base;
+  });
+  const food = new THREE.Mesh(berryGeo, berryMat); food.position.set(1.05, 0.55, 0); food.scale.setScalar(0.9); body.add(food);
+  const soil = new THREE.Mesh(clodGeo, clay); soil.position.set(1.0, 0.6, 0); soil.scale.setScalar(0.7); body.add(soil);
+  if (queen) {
+    const wm = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, side: THREE.DoubleSide, roughness: 0.2 });
+    [-1, 1].forEach(s => { const w = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.45), wm); w.rotation.x = -Math.PI / 2; w.rotation.z = s * 0.15; w.position.set(-0.8, 1.0, s * 0.4); body.add(w); });
+    g.scale.setScalar(1.55);
+  } else g.scale.setScalar(1.25);
+  const legs = [];
+  for (let row = 0; row < 3; row++) for (let side = 0; side < 2; side++) {
+    const sg = side ? 1 : -1, hx = [0.1, -0.2, -0.5][row];
+    legs.push({ hip: new THREE.Vector3(hx, 0.58, sg * 0.15), rest: new THREE.Vector3(hx + [0.5, 0.05, -0.6][row], 0.02, sg * 0.95), grp: (row + side) % 2, sg, a: limb(mat, 0.045), b: limb(mat, 0.035) });
+    g.add(legs[legs.length - 1].a); g.add(legs[legs.length - 1].b);
+  }
+  g.userData = { body, head, mands, ants, food, soil, legs, gaster, phase: Math.random() * 6, x: null, y: null, h: 0, queen };
+  scene.add(g); return g;
+}
+const _v = new THREE.Vector3(), _k = new THREE.Vector3(), _p = new THREE.Vector3();
+function animateLegs(u, phase, moving) {
+  u.legs.forEach(l => {
+    const ang = phase + Math.PI * l.grp, stride = moving ? 0.42 : 0, lift = moving ? Math.max(0, Math.sin(ang)) * 0.38 : 0;
+    const foot = new THREE.Vector3(l.rest.x - stride * Math.cos(ang), l.rest.y + lift, l.rest.z);
+    _v.subVectors(foot, l.hip); let d = _v.length(); const max = (L1 + L2) * 0.98; if (d > max) { _v.multiplyScalar(max / d); d = max; foot.copy(l.hip).add(_v); }
+    const h = Math.sqrt(Math.max(L1 * L1 - (d / 2) * (d / 2), 0.0001)); _p.copy(_v).normalize();
+    _k.copy(up).addScaledVector(_p, -up.dot(_p)); if (_k.lengthSq() < 1e-4) _k.set(0, 1, 0); _k.normalize(); _k.z += l.sg * 0.45; _k.normalize();
+    const knee = new THREE.Vector3().copy(l.hip).addScaledVector(_v, 0.5).addScaledVector(_k, h);
+    place(l.a, l.hip, knee); place(l.b, knee, foot);
+  });
+}
+
+// ---------- camera ----------
+let theta = 0.8, phi = 0.8, dist = 60, drag = false, lx = 0, ly = 0, followId = null;
+const target = new THREE.Vector3();
+renderer.domElement.addEventListener('pointerdown', e => { drag = true; lx = e.clientX; ly = e.clientY; });
+addEventListener('pointerup', () => drag = false);
+addEventListener('pointermove', e => { if (!drag) return; theta -= (e.clientX - lx) * 0.006; phi = Math.max(0.08, Math.min(1.52, phi - (e.clientY - ly) * 0.006)); lx = e.clientX; ly = e.clientY; });
+addEventListener('wheel', e => { dist = Math.max(4, Math.min(120, dist * (1 + e.deltaY * 0.001))); }, { passive: true });
+function resize() { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
+addEventListener('resize', resize); resize();
+
+let underOn = false, shadowOn = true;
+function toggleUnder() {
+  underOn = !underOn; $('bUnder').classList.toggle('on', underOn); under.visible = underOn; surface.visible = !underOn;
+  terrainMat.transparent = underOn; terrainMat.opacity = underOn ? 0.16 : 1; terrainMat.depthWrite = !underOn; terrainMat.needsUpdate = true;
+  if (underOn) { phi = 0.7; dist = 18; target.set(0, -3, 0); } else { dist = 60; target.set(0, 0, 0); }
+}
+function toggleShadow() { shadowOn = !shadowOn; $('bShadow').classList.toggle('on', shadowOn); sun.castShadow = shadowOn; scene.traverse(o => { if (o.material) o.material.needsUpdate = true; }); }
+function sp(v) { fetch('/speed?v=' + v); }
+
+// ---------- stream ----------
+const ants = new Map(); let latest = null, frames = 0, fpsT = performance.now(), fpsN = 0;
+function onFrame(f) {
+  latest = f;
+  if (srcMeshes.length !== f.s.length) { srcMeshes.forEach(m => scene.remove(m)); srcMeshes = f.s.map((s, i) => s[0] === 'food' ? makeFood(i) : makePoison(i)); }
+  if (f.p) {
+    for (let i = 0; i < A * A; i++) {
+      const v = Math.min(1, f.p[i] / 10 * 0.7), o = i * 4;
+      pimg.data[o] = 255; pimg.data[o + 1] = 150 + 90 * v; pimg.data[o + 2] = 40; pimg.data[o + 3] = Math.min(200, 255 * Math.sqrt(v));
+    }
+    pctx.putImageData(pimg, 0, 0); ptex.needsUpdate = true;
+  }
+  while (clods.length < f.pl.length) { const i = clods.length, m = new THREE.Mesh(clodGeo, clay); m.rotation.set(i * 1.3, i * 2.1, i * 0.7); const s = 0.8 + (i * 37 % 10) / 14; m.scale.set(s, s * 0.8, s); m.castShadow = m.receiveShadow = true; scene.add(m); clods.push(m); }
+  f.pl.forEach((p, i) => clods[i].position.set(p[0] - H, 0.22 + p[2] * 0.42, p[1] - H));
+  // the nest only exists as far as the ants have built it
+  const built = f.pl.length, mg = 0.4 + 0.6 * Math.min(1, built / 60);
+  mound.scale.set(mg, 0.35 + 0.65 * Math.min(1, built / 60), mg);
+  for (let k = 0; k < 6; k++) {
+    const prog = k === 0 ? 0.55 + 0.45 * Math.min(1, built / 10) : Math.min(1, Math.max(0, (built - 10 * (k - 1)) / 10));
+    chamberMeshes[k].visible = prog > 0; chamberMeshes[k].scale.setScalar(Math.max(prog, 0.05));
+    if (k) chamberMeshes[k].position.set(0, 0, 0);
+  }
+  while (broodMeshes.length < f.b.length) { const m = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 8), new THREE.MeshStandardMaterial({ roughness: 0.6 })); under.add(m); broodMeshes.push(m); }
+  broodMeshes.forEach((m, i) => {
+    const b = f.b[i]; m.visible = !!b; if (!b) return;
+    m.scale.set(broodR[b[2]] * (b[2] === 1 ? 1.6 : 1), broodR[b[2]], broodR[b[2]]); m.material.color.setHex(broodCols[b[2]]);
+    m.position.set((b[0] - NEST[0]) * 1.1, -5.0 + broodR[b[2]] * 0.5, (b[1] - NEST[1]) * 1.1);
+  });
+  const seen = new Set();
+  f.a.forEach(a => { seen.add(a[0]); if (!ants.has(a[0])) ants.set(a[0], makeAnt(a[1] === 0)); });
+  for (const [id, m] of ants) if (!seen.has(id)) { scene.remove(m); ants.delete(id); if (followId === id) followId = null; }
+  f.s.forEach((s, m) => { if (s[0] === 'food') srcMeshes[m].userData.berries.forEach((b, i) => b.visible = i < s[3]); });
+  $('store').textContent = f.store; $('deliv').textContent = f.d; $('ch').textContent = f.ch; $('cap').textContent = f.cap;
+  $('pop').textContent = f.a.length; $('born').textContent = f.born; $('died').textContent = f.died; $('brood').textContent = f.b.length;
+  $('rows').innerHTML = f.a.map(a =>
+    `<tr class="row ${followId === a[0] ? 'sel' : ''}" onclick="followId=(followId===${a[0]}?null:${a[0]})"><td>${a[1] === 0 ? 'Queen' : '#' + a[0]}</td><td class="s${a[5]}">${STATE[a[5]]}</td><td>${a[1] ? a[6] : '-'}</td><td>${a[1] ? a[7] : '-'}</td><td>${a[9]}</td></tr>`).join('');
+  if (f.ev.length) { const log = $('log'); f.ev.forEach(e => { const d = document.createElement('div'); d.textContent = e; log.prepend(d); }); while (log.children.length > 14) log.lastChild.remove(); }
+}
+function connect() {
+  const es = new EventSource('/stream');
+  es.onopen = () => { $('status').textContent = 'LIVE'; $('status').style.color = '#6f6'; };
+  es.onmessage = e => onFrame(JSON.parse(e.data));
+  es.onerror = () => { $('status').textContent = 'Disconnected, retrying...'; $('status').style.color = '#f66'; es.close(); setTimeout(connect, 2000); };
+}
+connect();
+
+function angLerp(a, b, k) { const d = ((b - a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; return a + d * k; }
+let lastT = performance.now(), slow = 0;
+function render(now) {
+  const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
+  if (latest) {
+    latest.a.forEach(a => {
+      const ant = ants.get(a[0]); if (!ant) return; const u = ant.userData;
+      const jump = u.x === null || Math.hypot(a[2] - u.x, a[3] - u.y) > 4;
+      const px = u.x, py = u.y;
+      u.x = jump ? a[2] : u.x + (a[2] - u.x) * 0.3; u.y = jump ? a[3] : u.y + (a[3] - u.y) * 0.3; u.h = angLerp(u.h, a[4], 0.3);
+      const moved = jump ? 0 : Math.hypot(u.x - px, u.y - py);
+      u.phase += moved * 7.5; const moving = moved > 0.004;
+      ant.position.set(u.x - H, hAt(u.x - H, u.y - H), u.y - H); ant.rotation.y = -u.h;
+      u.food.visible = a[5] === 1; u.soil.visible = a[5] === 4;
+      u.body.position.y = moving ? Math.abs(Math.sin(u.phase)) * 0.025 : 0;
+      u.gaster.rotation.z = Math.sin(now / 700 + a[0]) * 0.04;
+      const open = 0.35 + 0.15 * Math.sin(now / 150 + a[0]) * (moving ? 1 : 0.3); u.mands.forEach(m => m.rotation.y = -m.userData.s * open);
+      u.ants.forEach(an => { an.rotation.y = an.userData.s * (0.5 + 0.22 * Math.sin(now / 130 + a[0] + an.userData.s)); an.rotation.z = 0.1 * Math.sin(now / 210 + an.userData.s); an.userData.elbow.rotation.y = an.userData.s * 0.3 * Math.sin(now / 170); });
+      animateLegs(u, u.phase, moving);
+    });
+    latest.s.forEach((s, m) => { const g = srcMeshes[m]; g.position.set(s[1] - H, hAt(s[1] - H, s[2] - H), s[2] - H); });
+    if (followId !== null && ants.has(followId)) { const a = ants.get(followId); target.lerp(_v.set(a.position.x, 0.5, a.position.z), 0.1); }
+  }
+  camera.position.set(target.x + Math.sin(theta) * Math.cos(phi) * dist, target.y + Math.sin(phi) * dist, target.z + Math.cos(theta) * Math.cos(phi) * dist);
+  camera.lookAt(target);
+  renderer.render(scene, camera);
+  fpsN++; if (now - fpsT > 1000) { $('fps').textContent = fpsN + ' fps'; if (fpsN < 18 && shadowOn && ++slow >= 3) { toggleShadow(); $('fps').textContent += ' (shadows auto-off)'; } else if (fpsN >= 18) slow = 0; fpsN = 0; fpsT = now; }
+  requestAnimationFrame(render);
+}
+requestAnimationFrame(render);
+</script>
+</body>
+</html>

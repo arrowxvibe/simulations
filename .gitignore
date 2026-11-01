@@ -1,0 +1,34 @@
+# backups made while editing, one-off patch scripts, logs, caches
+*_before_*.py
+*_before_*.html
+live4_*backup*.html
+patch_*.py
+swap_*.py
+expand_world.py
+*.log
+sweep2.txt
+vision.txt
+vision2.txt
+vision3.txt
+vision4.txt
+hard.txt
+grown.txt
+scale.txt
+export2.txt
+__pycache__/
+*.pyc
+
+# big or regenerable data (rebuild with convert_malecns.py and the training scripts)
+*.npz
+replay.json
+ant_3d.html
+fly_ckpt/latest*.pt
+fly_ckpt/latest.pt
+fly_ckpt/best_bc*.pt
+fly_ckpt/best.pt
+fly_ckpt/best_v2.pt
+fly_ckpt/best_v2_[ABC].pt
+cells.npz
+
+# data that lives elsewhere on this machine
+C:/
