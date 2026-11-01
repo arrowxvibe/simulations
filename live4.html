@@ -48,7 +48,7 @@
   Ants: <b id="pop">0</b> / room for <b id="cap">0</b> &nbsp; Chambers: <b id="ch">1</b><br>
   Born: <b id="born">0</b> &nbsp; Died: <b id="died">0</b> &nbsp; Brood: <b id="brood">0</b> &nbsp; Flies: <b id="nflies">0</b><br>
   <button id="bDuck" onclick="toggleDrive()">Play hero (T)</button><button id="bSound" onclick="toggleSound()">Sound (any key)</button><br>
-  <button id="bUnder" onclick="setUnder(!underOn, false)">Underground</button><button id="bQ" onclick="setQuality((quality + 2) % 3)">Quality: high</button><button id="bShadow" class="on" onclick="toggleShadow()">Shadows</button><button id="bPortals" class="on" onclick="portalsOn=!portalsOn;this.classList.toggle('on',portalsOn)">Portals</button><button id="bLabels" class="on" onclick="labelsOn=!labelsOn;this.classList.toggle('on',labelsOn)">Labels</button><button id="bPip" onclick="pipOn=!pipOn;this.classList.toggle('on',pipOn)">FPV window (P)</button><button id="bDay" class="on" onclick="cycleOn=!cycleOn;this.classList.toggle('on',cycleOn)">Day/night</button><br>
+  <button id="bUnder" onclick="setUnder(!underOn, false)">Underground</button><button id="bQ" onclick="setQuality((quality + 2) % 3)">Quality: high</button><button id="bShadow" class="on" onclick="toggleShadow()">Shadows</button><button id="bPortals" class="on" onclick="portalsOn=!portalsOn;this.classList.toggle('on',portalsOn)">Portals</button><button id="bMic" onclick="toggleMic()">Talk to Microduck</button><button id="bLabels" class="on" onclick="labelsOn=!labelsOn;this.classList.toggle('on',labelsOn)">Labels</button><button id="bPip" onclick="pipOn=!pipOn;this.classList.toggle('on',pipOn)">FPV window (P)</button><button id="bDay" class="on" onclick="cycleOn=!cycleOn;this.classList.toggle('on',cycleOn)">Day/night</button><br>
   Speed: <button onclick="sp(1)">1x</button><button onclick="sp(2)">2x</button><button onclick="sp(4)">4x</button><button onclick="sp(8)">8x</button><br>
   <span id="gp" style="color:#999">Gamepad: none detected (press a button on it)</span><br><span id="flyinfo" style="color:#9ad">Flies: scripted (run fly_server2.py for the real fly brain)</span>
 </div>
@@ -62,6 +62,15 @@
   Gamepad: left stick move (analog speed) &middot; right stick look &middot; A jump / hold for jetpack &middot; B dive &middot; X cheer &middot; Y or R3 first person &middot; L3/RB sprint &middot; D-pad gear &middot; Start toggle
 </div>
 <div id="pip"></div><div id="fpvhud"></div>
+<div id="micpanel" class="panel" style="display:none;left:12px;top:350px;width:290px">
+  <b>Talk to the Microduck</b>
+  <div id="micmsg" style="color:#bbb;font-size:12px">Click "Talk to Microduck" and allow the microphone. Your browser may send the audio to its speech service to turn it into text; this page records nothing. Your voice is played back from the boy's mouth, so use headphones. You can always type instead.</div>
+  <div style="background:#333;height:8px;border-radius:4px;margin:6px 0"><div id="micbar" style="background:#6f6;height:8px;border-radius:4px;width:0%"></div></div>
+  <div id="mictx" style="min-height:18px;color:#ffe0b0;font-size:12px"></div>
+  <label style="font-size:12px;color:#bbb;display:block;margin-top:4px"><input type="checkbox" id="voiceOut" checked> my voice comes out of the boy (use headphones)</label>
+  <label style="font-size:12px;color:#bbb;display:block"><input type="checkbox" id="boyVoice" checked> typed words are spoken by him too</label>
+  <form onsubmit="sendTyped(event)"><input id="micin" autocomplete="off" placeholder="or type: come here, sit, kick, dance..." style="width:100%;box-sizing:border-box;padding:5px;border-radius:6px;border:0;background:#3a322a;color:#eee;margin-top:4px"></form>
+</div>
 <div id="portals"></div>
 <div id="portalBig"><div class="bar"><b id="pbName"></b><span><button onclick="enterFeed(bigDef)">Enter (full screen)</button><button onclick="closeBig()">Close</button></span></div><canvas id="pbCanvas" width="512" height="352"></canvas></div>
 <div id="feedbanner" onclick="exitFeed()"></div>
@@ -358,7 +367,7 @@ function makeLabel(text, color) {
   x.fillStyle = 'rgba(15,12,10,0.72)'; x.beginPath(); x.roundRect ? x.roundRect(4, 8, 312, 48, 14) : x.rect(4, 8, 312, 48); x.fill();
   x.fillStyle = color || '#fff'; x.font = '600 26px system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(text, 160, 33);
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, fog: false }));
-  sp.scale.set(5.2, 1.04, 1); sp.renderOrder = 10; scene.add(sp); return sp;
+  sp.userData.canvas = c; sp.scale.set(5.2, 1.04, 1); sp.renderOrder = 10; scene.add(sp); return sp;
 }
 
 // ---------- fly food: rotting fruit (the flies' own supply, separate from the ants' food) ----------
@@ -611,6 +620,7 @@ document.addEventListener('mousemove', e => { if (!document.pointerLockElement) 
 renderer.domElement.addEventListener('click', () => { if (driving && !document.pointerLockElement) renderer.domElement.requestPointerLock(); });
 addEventListener('wheel', e => { dist = clamp(dist * (1 + e.deltaY * 0.001), driving ? 5 : 4, A * 3); }, { passive: true });
 addEventListener('keydown', e => {
+  if (e.target && e.target.tagName === 'INPUT') return;      // typing to the duck must not move the boy
   keys[e.code] = true;
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   if (e.code === 'KeyT') toggleDrive(); if (e.code === 'KeyV' && driving) toggleFPV(); if (e.code === 'KeyP') pipOn = !pipOn; if (/^Digit[1-4]$/.test(e.code)) setGear(+e.code[5] - 1);
@@ -789,9 +799,11 @@ const md = { g: new THREE.Group(), servos: 0, pos: new THREE.Vector3(-30, 0, 18)
     md.legs.push({ hip, knee, ank, sd });
   });
   md.g.add(md.cam.clone()); md.label = makeLabel('Microduck (Pollen Robotics + Hugging Face)', '#ffe0b0');
-  md.g.scale.setScalar(1.7); md.g.position.copy(md.pos); scene.add(md.g);
+  md.g.scale.setScalar(1); md.g.updateMatrixWorld(true);
+  const baseH = new THREE.Box3().setFromObject(md.g).getSize(new THREE.Vector3()).y, BOY_H = 3.9;
+  md.height = 0.15 * BOY_H; md.g.scale.setScalar(md.height / baseH); md.g.position.copy(md.pos);   // relative to the boy: 25 cm against a person of about 1.65 m scene.add(md.g);
 }
-function mdPick() { const lim = H - 16; md.wp.set((rnd() - 0.5) * 2 * lim, 0, (rnd() - 0.5) * 2 * lim); }
+function mdPick() { const lim = H - 14; md.wp.set(clamp(md.pos.x + (rnd() - 0.5) * 18, -lim, lim), 0, clamp(md.pos.z + (rnd() - 0.5) * 18, -lim, lim)); }   // it wanders locally: it is small
 mdPick();
 function duckVoice() {   // the Microduck makes sounds of its own: two short rising chirps
   if (!soundOn || !AC) return; const v = vol(md.g.position) * 0.12; if (v < 0.004) return;
@@ -799,22 +811,30 @@ function duckVoice() {   // the Microduck makes sounds of its own: two short ris
 }
 function updateMicroduck(dt, now) {
   const L = (a, b, k) => a + (b - a) * Math.min(1, k * dt), t = now / 1000; md.t -= dt;
+  micTick(); if (md.sayT > 0) { md.sayT -= dt; if (md.sayT <= 0) relabel(md.label, 'Microduck (Pollen Robotics + Hugging Face)', '#ffe0b0'); }
+  if (md.follow && !['sit', 'fall', 'kick', 'peck', 'dance', 'hold'].includes(md.state)) {            // asked to come: stay near the boy
+    const dx = duck.pos.x - md.pos.x, dz = duck.pos.z - md.pos.z, dd = Math.hypot(dx, dz);
+    if (dd > 12) { md.state = 'walk'; md.wp.set(duck.pos.x - dx / dd * 6, 0, duck.pos.z - dz / dd * 6); md.t = 3; } else if (md.state === 'walk' || md.state === 'look') md.state = 'attend';
+  }
+  const toBoy = Math.atan2(-(duck.pos.z - md.pos.z), duck.pos.x - md.pos.x);
+  if (md.state === 'attend') { md.yaw = angLerp(md.yaw, toBoy, Math.min(1, dt * 3)); if (!md.follow) md.state = 'choose'; }
+  if (md.state === 'dance') { md.yaw += dt * 4; md.speed = L(md.speed, md.height * 1.0, 6); }
   const st = md.state;
   if (st === 'walk') {
     const d = new THREE.Vector3().subVectors(md.wp, md.pos); d.y = 0; const dist = d.length(), want = Math.atan2(-d.z, d.x);
     md.yaw = angLerp(md.yaw, want, Math.min(1, dt * 2.2)); const turn = Math.abs(((want - md.yaw + PI) % (2 * PI)) - PI);
-    md.speed = L(md.speed, turn > 0.9 ? 0.5 : 5.5, 4); md.pos.x += Math.cos(md.yaw) * md.speed * dt; md.pos.z -= Math.sin(md.yaw) * md.speed * dt;
-    if (dist < 2 || md.t <= 0) { md.state = 'choose'; }
-  } else md.speed = L(md.speed, 0, 6);
+    md.speed = L(md.speed, (turn > 0.9 ? 0.1 : 1) * md.height * 0.85 * (md.follow ? 8 : 1), 4); md.pos.x += Math.cos(md.yaw) * md.speed * dt; md.pos.z -= Math.sin(md.yaw) * md.speed * dt;
+    if (dist < Math.max(0.3, md.height * 0.9) || md.t <= 0) { md.state = md.follow ? 'attend' : 'choose'; }
+  } else if (st !== 'dance') md.speed = L(md.speed, 0, 6);
   if (md.state === 'choose') {
     const r = Math.random(); md.speed = 0;
     if (r < 0.34) { md.state = 'peck'; md.t = 3.4; md.peck = 0; } else if (r < 0.52) { md.state = 'look'; md.t = 3; } else if (r < 0.66) { md.state = 'sit'; md.t = 3.2; }
     else if (r < 0.76) { md.state = 'kick'; md.t = 1.6; } else if (r < 0.82) { md.state = 'fall'; md.t = 4.2; duckVoice(); } else { md.state = 'walk'; mdPick(); md.t = 12; }
   }
   if (st !== md.state && md.state === 'walk') duckVoice();
-  if (md.state === 'peck' && md.t < 0) { if (md.carry === 0 && Math.random() < 0.7) md.carry = 1; md.state = 'walk'; mdPick(); md.t = 12; }
-  if (['look', 'sit', 'kick', 'fall'].includes(md.state) && md.t <= 0) { md.state = 'walk'; mdPick(); md.t = 12; if (md.carry && Math.random() < 0.5) md.carry = 0; }
-  md.phase += md.speed * dt * 1.5; const walk = clamp(md.speed / 4, 0, 1);
+  if (md.state === 'peck' && md.t < 0) { if (md.carry === 0 && Math.random() < 0.7) md.carry = 1; md.state = md.follow ? 'attend' : 'walk'; mdPick(); md.t = 12; }
+  if (['look', 'sit', 'kick', 'fall', 'dance', 'hold'].includes(md.state) && md.t <= 0) { md.state = md.follow ? 'attend' : 'walk'; mdPick(); md.t = 12; if (md.carry && Math.random() < 0.5) md.carry = 0; }
+  const nominal = md.height * 0.85; md.phase += dt * 8 * Math.min(2.5, md.speed / nominal); const walk = clamp(md.speed / (nominal * 0.75), 0, 1);
   // pose targets
   const pk = md.state === 'peck' ? Math.max(0, Math.sin(t * 7)) : 0; if (md.state === 'peck' && pk > 0.95) { if (!md.pecked) { duckVoice(); md.pecked = true; } } else md.pecked = false;
   md.sit = L(md.sit, md.state === 'sit' ? 1 : 0, 5); md.kick = md.state === 'kick' ? Math.sin(clamp((1.6 - md.t) / 1.6, 0, 1) * PI * 2) : 0;
@@ -828,13 +848,109 @@ function updateMicroduck(dt, now) {
   });
   const roll = Math.sin(md.phase) * 0.13 * walk;                                       // the waddle
   md.g.rotation.set(md.fall * 1.45 + roll, md.yaw, 0, 'YXZ'); md.g.rotation.x = md.fall * 1.45 + roll;
-  md.g.position.set(md.pos.x, hAt(md.pos.x, md.pos.z) + Math.abs(Math.sin(md.phase)) * 0.15 * walk - 3.2 * md.sit * 1.0 + 3.4 * md.fall, md.pos.z);
+  const kk = md.g.scale.x / 1.7; md.g.position.set(md.pos.x, hAt(md.pos.x, md.pos.z) + (Math.abs(Math.sin(md.phase)) * 0.15 * walk - 3.2 * md.sit + 3.4 * md.fall) * kk, md.pos.z);
   const nk = L(md.neck.rotation.z, -1.0 * pk - 0.1 * md.sit + Math.sin(md.phase * 2) * 0.06 * walk, 12); md.neck.rotation.z = nk;
-  md.head.rotation.y = md.state === 'look' ? Math.sin(t * 1.6) * 1.0 : L(md.head.rotation.y, Math.sin(md.phase) * 0.08 * walk, 6);
+  const relBoy = clamp(((toBoy - md.yaw + PI) % (2 * PI) + 2 * PI) % (2 * PI) - PI, -1.1, 1.1);
+  md.head.rotation.y = md.state === 'look' ? Math.sin(t * 1.6) * 1.0 : (md.listen > 0.15 || md.state === 'attend') ? L(md.head.rotation.y, relBoy, 8) : L(md.head.rotation.y, Math.sin(md.phase) * 0.08 * walk, 6);
   md.head.rotation.z = L(md.head.rotation.z, -0.6 * pk, 12);
   const open = md.state === 'peck' ? (pk > 0.2 && pk < 0.9 ? 0.55 : 0.0) : (md.carry ? 0.0 : 0.05 + 0.04 * Math.sin(t * 3)); md.jaw.rotation.z = L(md.jaw.rotation.z, -open, 14);
-  md.seed.visible = !!md.carry; md.rec.material.emissiveIntensity = 0.6 + 1.2 * (Math.sin(t * 3) > 0 ? 1 : 0);
-  md.label.visible = labelsOn; md.label.position.set(md.g.position.x, md.g.position.y + 25, md.g.position.z); fitLabel(md.label);
+  md.seed.visible = !!md.carry; md.rec.material.emissiveIntensity = 0.6 + 1.2 * (Math.sin(t * (md.listen > 0.15 ? 9 : 3)) > 0 ? 1 : 0);   // blinks faster when it hears you
+  md.label.visible = labelsOn; md.label.position.set(md.g.position.x, md.g.position.y + md.height * 1.5 + 0.9, md.g.position.z); fitLabel(md.label);
+}
+
+// ---------- talking to the Microduck: microphone + speech recognition, or typed commands ----------
+// Nothing is recorded by this page. If your browser has speech recognition (Chrome, Edge), the browser itself may send the audio to its speech service.
+md.follow = false; md.listen = 0; md.sayT = 0;
+function relabel(sp, text, color) {
+  const c = sp.userData.canvas, x = c.getContext('2d'); x.clearRect(0, 0, 320, 64); x.fillStyle = 'rgba(15,12,10,0.72)'; x.beginPath(); x.roundRect ? x.roundRect(4, 8, 312, 48, 14) : x.rect(4, 8, 312, 48); x.fill();
+  x.fillStyle = color; x.font = '600 24px system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(text, 160, 33); sp.material.map.needsUpdate = true;
+}
+function mdSay(text) { relabel(md.label, text, '#fff2b0'); md.sayT = 3.5; }
+function duckSad() { if (!soundOn || !AC) return; const t = AC.currentTime, o = AC.createOscillator(), gn = AC.createGain(); o.type = 'triangle'; o.frequency.setValueAtTime(520, t); o.frequency.exponentialRampToValueAtTime(260, t + 0.25); gn.gain.setValueAtTime(0.0001, t); gn.gain.exponentialRampToValueAtTime(0.12, t + 0.02); gn.gain.exponentialRampToValueAtTime(0.0001, t + 0.28); o.connect(gn); gn.connect(master); o.start(t); o.stop(t + 0.3); }
+const MD_WORDS = [['stop', ['stop', 'stay', 'wait', 'freeze', 'hold']], ['sit', ['sit']], ['kick', ['kick']], ['fall', ['fall', 'tumble', 'roll over', 'flop']], ['dance', ['dance', 'spin', 'twirl', 'boogie']],
+  ['peck', ['peck', 'eat', 'grab', 'pick', 'hungry', 'food']], ['look', ['look', 'watch']], ['come', ['come', 'here', 'follow', 'over']], ['walk', ['walk', 'wander', 'stand', 'get up', 'go ']], ['hello', ['hello', 'hi', 'hey', 'good', 'duck']]];
+function mdCommand(text) {
+  const s = ' ' + text.toLowerCase().replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ') + ' '; let cmd = null;
+  for (const [name, words] of MD_WORDS) if (words.some(w => w.includes(' ') ? s.includes(w) : s.includes(' ' + w))) { cmd = name; break; }
+  const go = (state, t, say) => { md.state = state; md.t = t; mdSay(say); duckVoice(); };
+  switch (cmd) {
+    case 'stop': md.follow = false; go('hold', 6, 'Okay, staying put.'); break;
+    case 'sit': md.follow = false; go('sit', 9, 'Sitting down.'); break;
+    case 'kick': go('kick', 1.6, 'Kick!'); break;
+    case 'fall': md.follow = false; go('fall', 4.2, 'Whoa...'); break;
+    case 'dance': go('dance', 4.5, 'Dancing!'); break;
+    case 'peck': md.follow = false; md.peck = 0; go('peck', 3.4, 'Looking for a snack.'); break;
+    case 'look': go('look', 4, 'Looking around.'); break;
+    case 'come': md.follow = true; md.state = 'walk'; md.t = 3; mdSay('On my way!'); duckVoice(); break;
+    case 'walk': md.follow = false; mdPick(); go('walk', 12, 'Off I go.'); break;
+    case 'hello': go('look', 2, 'Chirp chirp! Hello!'); md.head.rotation.z = -0.4; break;
+    default: mdSay('? (I know: come, sit, kick, peck, look, dance, stop, hello)'); duckSad();
+  }
+  $('mictx').textContent = $('mictx').textContent + (cmd ? '  -> ' + cmd : '  -> not understood');
+}
+const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition, mic = { on: false, rec: null, an: null, buf: null, level: 0, stream: null, ctx: null };
+function micUI(msg) { $('micmsg').textContent = msg; }
+function buildVoiceChain() {     // microphone -> (loudness meter) and -> a 3D sound source sitting at the boy's head
+  const src = mic.ctx.createMediaStreamSource(mic.stream);
+  mic.an = mic.ctx.createAnalyser(); mic.an.fftSize = 512; src.connect(mic.an); mic.buf = new Uint8Array(mic.an.fftSize);
+  mic.voice = mic.ctx.createGain(); mic.voice.gain.value = 0.7;
+  const pan = mic.ctx.createPanner(); pan.panningModel = 'HRTF'; pan.distanceModel = 'inverse'; pan.refDistance = 8; pan.rolloffFactor = 0.9; pan.maxDistance = 800;
+  const comp = mic.ctx.createDynamicsCompressor();
+  src.connect(mic.voice); mic.voice.connect(pan); pan.connect(comp); comp.connect(mic.ctx.destination); mic.pan = pan; mic.hot = 0; mic.muted = false;
+}
+function setAudioPos(node, p) { if (node.positionX) { node.positionX.value = p.x; node.positionY.value = p.y; node.positionZ.value = p.z; } else node.setPosition(p.x, p.y, p.z); }
+async function toggleMic() {
+  $('micpanel').style.display = 'block';
+  if (mic.on) { stopMic(); return; }
+  try {
+    mic.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    mic.ctx = new (window.AudioContext || window.webkitAudioContext)(); buildVoiceChain();
+  } catch (e) { micUI('The microphone is blocked or not available (' + (e.name || 'error') + '). You can still type to the duck below.'); return; }
+  mic.on = true; $('bMic').classList.add('on'); $('bMic').textContent = 'Mic on';
+  if (SpeechRec) { startRec(); micUI('Listening. Try: come here, sit, kick, peck, look, dance, stop, hello.'); }
+  else micUI('The microphone is on and the duck turns toward your voice, but this browser has no speech recognition. Type commands below.');
+}
+function startRec() {
+  const r = new SpeechRec(); mic.rec = r; r.continuous = true; r.interimResults = true; r.lang = 'en-US';
+  r.onresult = e => { for (let i = e.resultIndex; i < e.results.length; i++) { if (mic.boyTalking) continue; const tx = e.results[i][0].transcript; $('mictx').textContent = '"' + tx.trim() + '"'; if (e.results[i].isFinal) { boySay(tx); mdCommand(tx); } } };
+  r.onerror = e => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { micUI('Speech recognition was blocked (' + e.error + '). Type to the duck below instead.'); mic.rec = null; } };
+  r.onend = () => { if (mic.on && mic.rec) { try { r.start(); } catch (err) {} } };
+  try { r.start(); } catch (err) {}
+}
+function stopMic() {
+  mic.on = false; if (mic.rec) { try { mic.rec.stop(); } catch (e) {} mic.rec = null; } if (mic.stream) mic.stream.getTracks().forEach(t => t.stop()); if (mic.ctx) mic.ctx.close();
+  mic.an = null; mic.level = 0; $('bMic').classList.remove('on'); $('bMic').textContent = 'Talk to Microduck'; micUI('Microphone off.'); $('micbar').style.width = '0%';
+}
+function micTick() {
+  if (!mic.on || !mic.an) { md.listen *= 0.95; return; }
+  mic.an.getByteTimeDomainData(mic.buf); let sum = 0; for (const v of mic.buf) sum += (v - 128) * (v - 128);
+  mic.level = Math.sqrt(sum / mic.buf.length) / 128; $('micbar').style.width = Math.min(100, mic.level * 400) + '%'; md.listen = (mic.level > 0.03 || duck.say.t > 0) ? 1 : md.listen * 0.95;
+  if (mic.pan) {
+    const head = new THREE.Vector3(); duck.parts.head.getWorldPosition(head); setAudioPos(mic.pan, head);                   // the voice is at his head
+    const L = mic.ctx.listener, f = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);                          // you hear it from where the camera is
+    setAudioPos(L, camera.position); if (L.forwardX) { L.forwardX.value = f.x; L.forwardY.value = f.y; L.forwardZ.value = f.z; L.upX.value = 0; L.upY.value = 1; L.upZ.value = 0; } else L.setOrientation(f.x, f.y, f.z, 0, 1, 0);
+    const on = $('voiceOut').checked && !mic.muted; mic.voice.gain.value = on ? 0.7 : 0;
+    mic.hot = mic.level > 0.45 ? mic.hot + 1 / 60 : Math.max(0, mic.hot - 2 / 60);                                           // a loud level that will not die down means the speakers feed back
+    if (on && mic.hot > 0.8) { mic.muted = true; $('voiceOut').checked = false; micUI("Feedback: the speakers are being picked up by the microphone, so the boy's voice is muted. Use headphones, then tick 'my voice comes out of the boy' again."); }
+  }
+}
+function sendTyped(ev) { ev.preventDefault(); const i = $('micin'); if (i.value.trim()) { $('mictx').textContent = '(typed) "' + i.value.trim() + '"'; boySay(i.value, true); mdCommand(i.value); i.value = ''; } }
+
+// ---------- the boy speaks: what you say or type comes out of him (speech bubble, moving mouth, and spoken out loud) ----------
+duck.say = { t: 0, text: '' };
+const boyBubble = makeLabel('', '#ffffff'), boyMouth = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshStandardMaterial({ color: 0x5a1a1a, roughness: 0.6 }));
+boyMouth.position.set(1.16, -0.52, 0); boyMouth.scale.set(0.3, 0.2, 1.2); boyMouth.visible = false; duck.parts.head.add(boyMouth);
+function boySay(text, speak) {
+  text = text.trim(); if (!text) return; relabel(boyBubble, '"' + text.slice(0, 26) + '"', '#ffffff'); duck.say.t = Math.max(2.5, 0.4 * text.split(/\s+/).length + 1.6);
+  if (speak && $('boyVoice') && $('boyVoice').checked && window.speechSynthesis) {
+    speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.pitch = 1.7; u.rate = 1.05; u.volume = clamp(1 - duck.g.position.distanceTo(camera.position) / 80, 0.15, 1);   // quieter when the boy is far away
+    mic.boyTalking = true; u.onend = u.onerror = () => setTimeout(() => { mic.boyTalking = false; }, 500); speechSynthesis.speak(u);                                  // the microphone ignores it while he speaks
+  }
+}
+function updateBoyTalk(dt, now) {
+  const talking = duck.say.t > 0 || (mic.on && mic.level > 0.04); duck.say.t = Math.max(0, duck.say.t - dt);
+  boyMouth.visible = talking; if (talking) boyMouth.scale.y = 0.2 + 0.9 * Math.abs(Math.sin(now / 1000 * 17));
+  boyBubble.visible = duck.say.t > 0 && labelsOn !== undefined; boyBubble.position.set(duck.g.position.x, duck.g.position.y + 5.4, duck.g.position.z); fitLabel(boyBubble);
 }
 
 // ---------- portals: a live feed from every creature ----------
@@ -1005,7 +1121,7 @@ function render(now) {
     });
     latest.s.forEach((s, m) => { const g = srcMeshes[m]; if (g) g.position.set(s[1] - H, hAt(s[1] - H, s[2] - H), s[2] - H); });
   }
-  updateFlies(dt, now); updateDuck(dt, pad); updateMicroduck(dt, now);
+  updateFlies(dt, now); updateDuck(dt, pad); updateMicroduck(dt, now); updateBoyTalk(dt, now);
   if (soundOn) { let dm = 99; flies.forEach(f => { if (!f.landed) dm = Math.min(dm, f.pos.distanceTo(camera.position)); }); humGain.gain.value = 0.07 * Math.pow(clamp(1 - dm / 26, 0, 1), 2); humOsc.frequency.value = 200 + 12 * Math.sin(now / 400); }
   if (soundOn && motorGain) { motorGain.gain.value = 0.07 * duck.thrust + 0.008 * clamp(duck.speed / 20, 0, 1); motorOsc.frequency.value = 62 + duck.thrust * 70; jetGain.gain.value = 0.14 * duck.thrust; }
   motes.position.x = Math.sin(now / 5000) * 1.5; motes.rotation.y += dt * 0.01;
