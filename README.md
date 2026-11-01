@@ -21,7 +21,7 @@ and a boy with a jetpack you can play. Everything runs live and streams to a 3D 
   the trained walking policy.
 - **Talk to the Microduck**: click *Talk to Microduck*, allow the microphone, and say come here, sit, kick, peck, look, dance, stop or hello (or type them).
   Your own voice comes out of the boy's mouth as a 3D sound at his head, so use headphones: the page mutes it if the speakers feed back into the microphone.
-  Chrome and Edge send the audio to their own speech service to turn it into words; this page records nothing. The Microduck is 15% of the boy's height.
+  Chrome and Edge send the audio to their own speech service to turn it into words; this page records nothing. The Microduck is 40% of the boy's height (a real one would be about 15%, but it was too small to spot).
 - Known weak spots: the ant colony's workers still die young in this world, ant vision has a safety/food trade-off, and the fly brains
   forage badly. The `run_*.py` scripts reproduce the experiments behind these statements.
 

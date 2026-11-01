@@ -165,43 +165,7 @@ const dummy = new THREE.Object3D(), TREES = [], ROCKS = [];
 const surface = new THREE.Group(); scene.add(surface);
 const grassTime = { value: 0 };
 // (no grass: the ground is bare soil with clover, broadleaf plants, flowers and ferns)
-{ // flowers of several colours, in clusters, on stems of different heights
-  const NF = 900, stemG = new THREE.CylinderGeometry(0.022, 0.034, 1, 5).translate(0, 0.5, 0), petG = new THREE.CircleGeometry(0.36, 10).rotateX(-PI / 2), cenG = new THREE.SphereGeometry(0.12, 8, 6);
-  const stems = new THREE.InstancedMesh(stemG, new THREE.MeshStandardMaterial({ color: 0x3f7f30, roughness: 0.8 }), NF);
-  const petals = new THREE.InstancedMesh(petG, new THREE.MeshStandardMaterial({ roughness: 0.55, side: THREE.DoubleSide }), NF), cens = new THREE.InstancedMesh(cenG, new THREE.MeshStandardMaterial({ color: 0xf3c21c, roughness: 0.5 }), NF), c = new THREE.Color();
-  const pal = [0xffffff, 0xffe45c, 0xc77dff, 0xff7aa8, 0x7ab8ff, 0xff8a3c, 0xfff1b0], centres = Array.from({ length: 110 }, () => [(rnd() - 0.5) * 2 * (H - 5), (rnd() - 0.5) * 2 * (H - 5), pal[Math.floor(rnd() * pal.length)]]);
-  for (let i = 0; i < NF; i++) {
-    let x, z, cl; do { cl = centres[Math.floor(rnd() * centres.length)]; x = cl[0] + (rnd() - 0.5) * 5; z = cl[1] + (rnd() - 0.5) * 5; } while (Math.abs(x) > H - 3 || Math.abs(z) > H - 3 || Math.hypot(x, z) < 8 || Math.hypot(x - 20, z + 16) < 4);
-    const h = 1.2 + rnd() * 2.4, y = hAt(x, z), tx = (rnd() - 0.5) * 0.3, tz = (rnd() - 0.5) * 0.3;
-    dummy.position.set(x, y, z); dummy.rotation.set(tx, 0, tz); dummy.scale.set(1, h, 1); dummy.updateMatrix(); stems.setMatrixAt(i, dummy.matrix);
-    dummy.position.set(x - Math.sin(tz) * h, y + Math.cos(tx) * h, z + Math.sin(tx) * h); dummy.rotation.set(tx * 1.2, rnd() * 6, tz * 1.2); dummy.scale.setScalar(0.8 + rnd() * 0.7); dummy.updateMatrix(); petals.setMatrixAt(i, dummy.matrix);
-    dummy.position.y += 0.04; dummy.scale.setScalar(0.8 + rnd() * 0.5); dummy.updateMatrix(); cens.setMatrixAt(i, dummy.matrix); c.setHex(cl[2]); petals.setColorAt(i, c);
-  }
-  surface.add(stems); surface.add(petals); surface.add(cens);
-}
-{ // low plants: clover (three round leaves, some with white heads) and broadleaf rosettes
-  const NC = 1100, leafG = new THREE.CircleGeometry(0.3, 8).rotateX(-PI / 2), clover = new THREE.InstancedMesh(leafG, new THREE.MeshStandardMaterial({ roughness: 0.8, side: THREE.DoubleSide }), NC * 3), heads = new THREE.InstancedMesh(new THREE.SphereGeometry(0.13, 8, 6), new THREE.MeshStandardMaterial({ color: 0xf4f0e6, roughness: 0.7 }), NC), c = new THREE.Color();
-  let hc = 0;
-  for (let i = 0; i < NC; i++) {
-    const x = (rnd() - 0.5) * 2 * (H - 3), z = (rnd() - 0.5) * 2 * (H - 3); if (Math.hypot(x, z) < 7) { for (let k = 0; k < 3; k++) { dummy.scale.set(0, 0, 0); dummy.updateMatrix(); clover.setMatrixAt(i * 3 + k, dummy.matrix); } continue; }
-    const y = hAt(x, z) + 0.05; c.setHSL(0.27 + rnd() * 0.05, 0.5, 0.2 + rnd() * 0.12);
-    for (let k = 0; k < 3; k++) { const a = k * 2.09 + rnd(); dummy.position.set(x + Math.cos(a) * 0.3, y + 0.02 * k, z + Math.sin(a) * 0.3); dummy.rotation.set(0, rnd() * 6, 0); dummy.scale.setScalar(0.8 + rnd() * 0.5); dummy.updateMatrix(); clover.setMatrixAt(i * 3 + k, dummy.matrix); clover.setColorAt(i * 3 + k, c); }
-    if (rnd() < 0.25 && hc < NC) { dummy.position.set(x, y + 0.55, z); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1.2, 1); dummy.updateMatrix(); heads.setMatrixAt(hc++, dummy.matrix); }
-  }
-  for (let i = hc; i < NC; i++) { dummy.scale.set(0, 0, 0); dummy.updateMatrix(); heads.setMatrixAt(i, dummy.matrix); }
-  surface.add(clover); surface.add(heads);
-  const bl = new THREE.PlaneGeometry(0.55, 1.7, 1, 3); bl.translate(0, 0.85, 0); const bp = bl.attributes.position;
-  for (let i = 0; i < bp.count; i++) { const y = bp.getY(i) / 1.7; bp.setX(i, bp.getX(i) * (1 - 0.7 * y * y)); bp.setZ(i, 0.5 * y * y); }
-  bl.computeVertexNormals(); const NP = 170, plants = new THREE.InstancedMesh(bl, new THREE.MeshStandardMaterial({ roughness: 0.75, side: THREE.DoubleSide }), NP * 6);
-  for (let i = 0; i < NP; i++) {
-    const x = (rnd() - 0.5) * 2 * (H - 4), z = (rnd() - 0.5) * 2 * (H - 4), hue = 0.25 + rnd() * 0.08, y = hAt(x, z), s = 0.7 + rnd() * 0.9;
-    for (let k = 0; k < 6; k++) {
-      if (Math.hypot(x, z) < 8) { dummy.scale.set(0, 0, 0); } else { dummy.position.set(x, y, z); dummy.rotation.order = 'YXZ'; dummy.rotation.set(0.7 + rnd() * 0.5, k / 6 * 6.283 + rnd() * 0.4, 0); dummy.scale.setScalar(s); }
-      dummy.updateMatrix(); plants.setMatrixAt(i * 6 + k, dummy.matrix); c.setHSL(hue, 0.5, 0.22 + rnd() * 0.12); plants.setColorAt(i * 6 + k, c);
-    }
-  }
-  dummy.rotation.order = 'XYZ'; surface.add(plants);
-}
+// (no flowers, clover or leafy plants: the ground is bare soil, so everything is easy to see)
 { // leaf litter
   const geo = new THREE.CircleGeometry(0.28, 7); geo.rotateX(-PI / 2);
   const N = 2600, leaves = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ roughness: 1, side: THREE.DoubleSide }), N), c = new THREE.Color();
@@ -801,7 +765,7 @@ const md = { g: new THREE.Group(), servos: 0, pos: new THREE.Vector3(-30, 0, 18)
   md.g.add(md.cam.clone()); md.label = makeLabel('Microduck (Pollen Robotics + Hugging Face)', '#ffe0b0');
   md.g.scale.setScalar(1); md.g.updateMatrixWorld(true);
   const baseH = new THREE.Box3().setFromObject(md.g).getSize(new THREE.Vector3()).y, BOY_H = 3.9;
-  md.height = 0.15 * BOY_H; md.g.scale.setScalar(md.height / baseH); md.g.position.copy(md.pos);   // relative to the boy: 25 cm against a person of about 1.65 m scene.add(md.g);
+  md.height = 0.4 * BOY_H; md.g.scale.setScalar(md.height / baseH); md.g.position.copy(md.pos);   // relative to the boy: 25 cm against a person of about 1.65 m scene.add(md.g);
 }
 function mdPick() { const lim = H - 14; md.wp.set(clamp(md.pos.x + (rnd() - 0.5) * 18, -lim, lim), 0, clamp(md.pos.z + (rnd() - 0.5) * 18, -lim, lim)); }   // it wanders locally: it is small
 mdPick();

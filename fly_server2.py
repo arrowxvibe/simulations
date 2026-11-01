@@ -57,7 +57,7 @@ def simulate():
         while True:
             p = frng.uniform(12, ARENA - 12, 2)
             if np.hypot(p[0] - ARENA / 2, p[1] - ARENA / 2) > 22: return [float(p[0]), float(p[1]), 12.0, kind]
-    fruits = [new_fruit(0), new_fruit(1)]               # two pieces of fruit, and the water well (the third place flies go to)
+    fruits = [new_fruit(0), new_fruit(0)]               # two pieces of fruit, and the water well (the third place flies go to)
     WELL = (ARENA / 2 + 20.0, ARENA / 2 - 16.0)
     mode, tm = ['fly'] * N, np.random.randint(100, 250, N)      # a real fly alternates flying, landing, walking and taking off
     MODES = {'fly': 0, 'descend': 1, 'walk': 2, 'takeoff': 3}
