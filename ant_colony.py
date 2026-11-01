@@ -8,9 +8,6 @@ New here:
   - ablation: learning on/off x pheromone on/off, to see which part helps
 """
 import numpy as np
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 
 ARENA = 120
 NEST = np.array([ARENA / 2.0, ARENA / 2.0])
@@ -230,6 +227,9 @@ def _job(name, seed, lrn, ph):
 
 
 def main():
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt          # only the experiment plots need it
     conds = {"neither": (False, False), "pheromone only": (False, True),
              "learning only": (True, False), "both": (True, True)}
     from multiprocessing import Pool

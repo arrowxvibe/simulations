@@ -19,6 +19,7 @@ PELLETS_PER_CHAMBER, MAX_CHAMBERS, ROOM_PER_CHAMBER = 10, 40, 3     # every cham
 MAX_PELLETS = PELLETS_PER_CHAMBER * MAX_CHAMBERS
 EGG_T, LARVA_T, PUPA_T = 80, 280, 400
 POP_LIMIT = 100   # no other limit: the colony starts with a queen and 2 workers and can grow to 100 ants, as food and room allow
+BURN, REST_BURN = 0.05, 0.02   # energy an ant burns per step while working / resting
 START_WORKERS = 2
 FORAGE, BUILD, EAT, REST = range(4)
 
@@ -103,7 +104,7 @@ class Colony:
         w.task, w.mode = None, "idle"
 
     def step_worker(self, w):
-        w.energy -= 0.03 if w.mode == "rest" else 0.08
+        w.energy -= REST_BURN if w.mode == "rest" else BURN
         w.fatigue = float(np.clip(w.fatigue + (-0.004 if w.mode == "rest" else 0.0004), 0, 1))
         w.bite_cd = max(0, w.bite_cd - 1)
         if self.world.human is not None and w.bite_cd == 0 and np.linalg.norm(w.pos - self.world.human) < 3.6 and self.rng.random() < 0.04:

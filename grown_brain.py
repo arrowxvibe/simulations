@@ -16,6 +16,11 @@ genome because development is noisy.
 """
 import numpy as np
 
+# Innate drives of a worker (rows: forage, build, eat, rest; columns: hunger, food store felt, nest needs work, carrying food, fatigue).
+# Every animal is born with some: hungry -> eat, tired -> rest, nest worn -> build when there is food, carrying food -> keep going home.
+# Learning and evolution change them; without any instincts the first workers starve before they can learn to eat.
+INSTINCTS = [0.5, -1.0, 0.0, 1.5, -1.0,    -1.0, 0.8, 1.5, -2.0, -0.8,    4.0, 0.3, 0.0, -3.0, 0.0,    -1.5, 0.0, 0.0, -2.0, 3.0]
+
 GENOME = dict(
     seed=7,                 # fixes the species' receptor "address" code (same for every individual)
     n_or=40,                # odor receptor genes (real ants have ~350)
@@ -38,7 +43,7 @@ GENOME = dict(
     max_bins=16,
     visual_kc_fraction=0.5, # share of late-born Kenyon cells that take visual input instead of smell
     # task-choice circuit (see decide.py). The innate prior/bias start at zero: evolution and learning fill them in.
-    state_kc=300, state_claws=3, task_prior=[0.0] * 20, task_bias=[0.0] * 4, task_T=1.0, task_lr=0.15,
+    state_kc=300, state_claws=3, task_prior=INSTINCTS, task_bias=[0.0] * 4, task_T=1.0, task_lr=0.15,
 )
 
 
