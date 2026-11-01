@@ -24,6 +24,8 @@
   #pip { position: fixed; left: 12px; bottom: 50px; display: none; border: 2px solid #20e0ff; border-radius: 6px; pointer-events: none; box-shadow: 0 0 12px rgba(32,224,255,.4); }
   #pip::after { content: 'FPV'; position: absolute; top: 4px; left: 8px; color: #20e0ff; font: 700 11px monospace; }
   #fpvhud { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); display: none; font: 13px monospace; color: #20e0ff; background: rgba(0,20,28,.55); padding: 4px 12px; border-radius: 4px; pointer-events: none; white-space: nowrap; }
+  #duckarrow { position: fixed; display: none; pointer-events: none; transform: translate(-50%, -50%); text-align: center; color: #ffd34d; font: 700 13px system-ui; text-shadow: 0 0 4px #000, 0 0 8px #000; z-index: 5; }
+  #duckarrow .ar { font-size: 38px; line-height: 38px; }
   #mapbox { position: fixed; left: 12px; bottom: 134px; background: rgba(20,17,14,.85); padding: 5px; border-radius: 8px; border: 1px solid #555; }
   #mapbox canvas { display: block; width: 230px; height: 230px; border-radius: 4px; cursor: crosshair; margin-bottom: 4px; }
   #portals { position: fixed; left: 50%; transform: translateX(-50%); bottom: 10px; display: flex; gap: 6px; }
@@ -50,7 +52,7 @@
   Ants: <b id="pop">0</b> / room for <b id="cap">0</b> &nbsp; Chambers: <b id="ch">1</b><br>
   Born: <b id="born">0</b> &nbsp; Died: <b id="died">0</b> &nbsp; Brood: <b id="brood">0</b> &nbsp; Flies: <b id="nflies">0</b><br>
   <button id="bDuck" onclick="toggleDrive()">Play hero (T)</button><button id="bSound" onclick="toggleSound()">Sound (any key)</button><br>
-  <button id="bUnder" onclick="setUnder(!underOn, false)">Underground</button><button id="bQ" onclick="setQuality((quality + 2) % 3)">Quality: high</button><button id="bShadow" class="on" onclick="toggleShadow()">Shadows</button><button id="bPortals" class="on" onclick="portalsOn=!portalsOn;this.classList.toggle('on',portalsOn)">Portals</button><button id="bMap" class="on" onclick="mapOn=!mapOn;this.classList.toggle('on',mapOn)">Map (M)</button><button id="bMic" onclick="toggleMic()">Talk to Microduck</button><button id="bLabels" class="on" onclick="labelsOn=!labelsOn;this.classList.toggle('on',labelsOn)">Labels</button><button id="bPip" onclick="pipOn=!pipOn;this.classList.toggle('on',pipOn)">FPV window (P)</button><button id="bDay" class="on" onclick="cycleOn=!cycleOn;this.classList.toggle('on',cycleOn)">Day/night</button><br>
+  <button id="bUnder" onclick="setUnder(!underOn, false)">Underground</button><button id="bQ" onclick="setQuality((quality + 2) % 3)">Quality: high</button><button id="bShadow" class="on" onclick="toggleShadow()">Shadows</button><button id="bPortals" class="on" onclick="portalsOn=!portalsOn;this.classList.toggle('on',portalsOn)">Portals</button><button id="bBeacon" class="on" onclick="beaconOn=!beaconOn;this.classList.toggle('on',beaconOn)">Beacon</button><button id="bMap" class="on" onclick="mapOn=!mapOn;this.classList.toggle('on',mapOn)">Map (M)</button><button id="bMic" onclick="toggleMic()">Talk to Microduck</button><button id="bLabels" class="on" onclick="labelsOn=!labelsOn;this.classList.toggle('on',labelsOn)">Labels</button><button id="bPip" onclick="pipOn=!pipOn;this.classList.toggle('on',pipOn)">FPV window (P)</button><button id="bDay" class="on" onclick="cycleOn=!cycleOn;this.classList.toggle('on',cycleOn)">Day/night</button><br>
   Speed: <button onclick="sp(1)">1x</button><button onclick="sp(2)">2x</button><button onclick="sp(4)">4x</button><button onclick="sp(8)">8x</button><br>
   <span id="gp" style="color:#999">Gamepad: none detected (press a button on it)</span><br><span id="flyinfo" style="color:#9ad">Flies: scripted (run fly_server2.py for the real fly brain)</span>
 </div>
@@ -64,6 +66,7 @@
   Gamepad: left stick move (analog speed) &middot; right stick look &middot; A jump / hold for jetpack &middot; B dive &middot; X cheer &middot; Y or R3 first person &middot; L3/RB sprint &middot; D-pad gear &middot; Start toggle
 </div>
 <div id="pip"></div><div id="fpvhud"></div>
+<div id="duckarrow"><div class="ar">&#10148;</div><span id="dkd"></span></div>
 <div id="mapbox"><canvas id="minimap" width="230" height="230"></canvas><button onclick="findMicroduck()">Find Microduck</button> <span style="font-size:11px;color:#bbb">click the map to go there</span></div>
 <div id="micpanel" class="panel" style="display:none;left:262px;top:350px;width:290px">
   <b>Talk to the Microduck</b>
@@ -920,6 +923,25 @@ function updateBoyTalk(dt, now) {
   boyBubble.visible = duck.say.t > 0 && labelsOn !== undefined; boyBubble.position.set(duck.g.position.x, duck.g.position.y + 5.4, duck.g.position.z); fitLabel(boyBubble);
 }
 
+// ---------- a beacon so the Microduck cannot be missed ----------
+const beacon = new THREE.Group(); let beaconOn = true;
+{
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.35, 20, 10, 1, true), new THREE.MeshBasicMaterial({ color: 0xffd34d, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+  beam.position.y = 10; beacon.add(beam);
+  const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.8), new THREE.MeshBasicMaterial({ color: 0xffe27a, fog: false })); gem.position.y = 21.5; beacon.add(gem); beacon.userData.gem = gem; scene.add(beacon);
+}
+function updateBeacon(now) { beacon.visible = beaconOn; beacon.position.copy(md.g.position); beacon.userData.gem.rotation.y = now / 400; beacon.userData.gem.position.y = 21.5 + Math.sin(now / 300) * 0.5; }
+const _pv = new THREE.Vector3();
+function updateDuckPointer() {      // when the Microduck is off screen, an arrow at the edge of the screen points to it and tells you how far it is
+  const el = document.getElementById('duckarrow'); if (!beaconOn) { el.style.display = 'none'; return; }
+  _pv.copy(md.g.position); _pv.y += md.height; const d = camera.position.distanceTo(md.g.position); _pv.project(camera);
+  const behind = _pv.z > 1; let x = behind ? -_pv.x : _pv.x, y = behind ? -_pv.y : _pv.y;
+  if (!behind && Math.abs(x) < 0.92 && Math.abs(y) < 0.88) { el.style.display = 'none'; return; }
+  const m = Math.max(Math.abs(x), Math.abs(y), 1e-3); x = x / m * 0.92; y = y / m * 0.86;
+  el.style.display = 'block'; el.style.left = ((x * 0.5 + 0.5) * innerWidth) + 'px'; el.style.top = ((1 - (y * 0.5 + 0.5)) * innerHeight) + 'px';
+  el.querySelector('.ar').style.transform = `rotate(${Math.atan2(-y, x)}rad)`; document.getElementById('dkd').textContent = 'Microduck ' + Math.round(d) + ' units';
+}
+
 // ---------- minimap ----------
 const MAPN = 230, MAPM = 16, mapCv = document.getElementById('minimap'), mapCtx = mapCv.getContext('2d'); let mapOn = true, mapN = 0;
 function mapXY(x, z) { const w = MAPN - 2 * MAPM; return [MAPM + (x + H) / (2 * H) * w, MAPM + (z + H) / (2 * H) * w]; }     // world x to the right, world z downward
@@ -940,16 +962,18 @@ function drawMap(now) {
   c.beginPath(); c.moveTo(bx + fx * 7, by + fy * 7); c.lineTo(bx - fx * 4 - fy * 4, by - fy * 4 + fx * 4); c.lineTo(bx - fx * 4 + fy * 4, by - fy * 4 - fx * 4); c.closePath(); c.fillStyle = '#4cc3ff'; c.fill(); c.strokeStyle = '#fff'; c.stroke();
   const pulse = 8 + 3 * Math.sin(now / 180), [mx, my] = mapXY(md.pos.x, md.pos.z);                                                           // the Microduck: gold, pulsing, named
   c.beginPath(); c.arc(mx, my, pulse, 0, 6.283); c.strokeStyle = 'rgba(255,214,77,0.9)'; c.lineWidth = 2; c.stroke(); dot(md.pos.x, md.pos.z, 4, '#ffd34d', '#fff');
-  c.font = '600 11px system-ui'; c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.lineWidth = 3; const lx = Math.min(mx + 12, MAPN - 70); c.strokeText('Microduck', lx, my + 4); c.fillText('Microduck', lx, my + 4);
-  c.strokeText('you', bx + 9, by - 6); c.fillText('you', bx + 9, by - 6);
+  c.font = '600 11px system-ui'; c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.lineWidth = 3; const lx = Math.min(mx + 12, MAPN - 70); c.strokeText('Microduck', lx, my + 16); c.fillText('Microduck', lx, my + 16);
+  c.strokeText('you', bx - 22, by - 9); c.fillText('you', bx - 22, by - 9);
 }
 mapCv.addEventListener('click', e => {                                                         // click the map: the boy goes there
   const r = mapCv.getBoundingClientRect(), [wx, wz] = mapWorld((e.clientX - r.left) * MAPN / r.width, (e.clientY - r.top) * MAPN / r.height);
   duck.pos.set(clamp(wx, -H + 3, H - 3), 0, clamp(wz, -H + 3, H - 3)); duck.pos.y = hAt(duck.pos.x, duck.pos.z); duck.vx = duck.vz = duck.vy = 0;
 });
-function findMicroduck() {                                                                      // stand next to the Microduck, facing it
-  const ox = md.pos.x + 4, oz = md.pos.z + 4; duck.pos.set(clamp(ox, -H + 3, H - 3), hAt(ox, oz), clamp(oz, -H + 3, H - 3)); duck.vx = duck.vz = duck.vy = 0;
-  const dx = md.pos.x - duck.pos.x, dz = md.pos.z - duck.pos.z; theta = Math.atan2(-dx, -dz); duck.yaw = Math.atan2(-dz, dx); phi = 0.25; dist = 6; exitFeed();
+function findMicroduck() {                                                                      // stand beside the Microduck with both of you in view
+  const a = Math.atan2(md.pos.z, md.pos.x) + 2.4, ox = md.pos.x + Math.cos(a) * 4.5, oz = md.pos.z + Math.sin(a) * 4.5;
+  duck.pos.set(clamp(ox, -H + 3, H - 3), hAt(ox, oz), clamp(oz, -H + 3, H - 3)); duck.vx = duck.vz = duck.vy = 0;
+  const dx = md.pos.x - duck.pos.x, dz = md.pos.z - duck.pos.z; duck.yaw = Math.atan2(-dz, dx);
+  theta = Math.atan2(-dz, dx); phi = 0.42; dist = 9; exitFeed(); if (document.pointerLockElement) document.exitPointerLock();   // the camera looks across, so the duck is beside the boy, not behind him
 }
 
 // ---------- portals: a live feed from every creature ----------
@@ -1120,7 +1144,7 @@ function render(now) {
     });
     latest.s.forEach((s, m) => { const g = srcMeshes[m]; if (g) g.position.set(s[1] - H, hAt(s[1] - H, s[2] - H), s[2] - H); });
   }
-  updateFlies(dt, now); updateDuck(dt, pad); updateMicroduck(dt, now); updateBoyTalk(dt, now);
+  updateFlies(dt, now); updateDuck(dt, pad); updateMicroduck(dt, now); updateBoyTalk(dt, now); updateBeacon(now);
   if (soundOn) { let dm = 99; flies.forEach(f => { if (!f.landed) dm = Math.min(dm, f.pos.distanceTo(camera.position)); }); humGain.gain.value = 0.07 * Math.pow(clamp(1 - dm / 26, 0, 1), 2); humOsc.frequency.value = 200 + 12 * Math.sin(now / 400); }
   if (soundOn && motorGain) { motorGain.gain.value = 0.07 * duck.thrust + 0.008 * clamp(duck.speed / 20, 0, 1); motorOsc.frequency.value = 62 + duck.thrust * 70; jetGain.gain.value = 0.14 * duck.thrust; }
   motes.position.x = Math.sin(now / 5000) * 1.5; motes.rotation.y += dt * 0.01;
@@ -1145,7 +1169,7 @@ function render(now) {
     if (followId !== null && ants.has(followId)) { const a = ants.get(followId); target.lerp(_v.set(a.position.x, 0.5, a.position.z), 0.1); }
     camera.position.set(target.x + Math.sin(theta) * Math.cos(phi) * dist, target.y + Math.sin(phi) * dist, target.z + Math.cos(theta) * Math.cos(phi) * dist); camera.lookAt(target);
   }
-  feedCamera();
+  feedCamera(); updateDuckPointer();
   renderer.render(scene, camera);
   if (driving && !firstPerson && pipOn) {
     const w = Math.round(innerWidth * 0.27), h = Math.round(w * 0.6), x = 12, y = 50, el = $('pip');
