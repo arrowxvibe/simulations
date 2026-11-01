@@ -155,29 +155,7 @@ pher.rotation.x = -PI / 2; pher.position.y = 0.05; scene.add(pher);
 const dummy = new THREE.Object3D(), TREES = [], ROCKS = [];
 const surface = new THREE.Group(); scene.add(surface);
 const grassTime = { value: 0 };
-{ // dense grass: tapering, curved blades, dark at the base and light at the tip, growing in natural clumps, swaying in the wind
-  const geo = new THREE.PlaneGeometry(1, 1, 1, 3); geo.translate(0, 0.5, 0);
-  const p = geo.attributes.position, col = new Float32Array(p.count * 3);
-  for (let i = 0; i < p.count; i++) { const y = p.getY(i); p.setX(i, p.getX(i) * 0.12 * (1 - 0.88 * y)); p.setZ(i, 0.3 * y * y); col[i * 3] = 0.06 + 0.36 * y; col[i * 3 + 1] = 0.18 + 0.42 * y; col[i * 3 + 2] = 0.04 + 0.1 * y; }
-  geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); geo.computeVertexNormals();
-  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.85 });
-  mat.onBeforeCompile = sh => {
-    sh.uniforms.uTime = grassTime;
-    sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>',
-      'vec3 transformed = vec3(position); transformed.x += sin(uTime*1.6 + instanceMatrix[3].x*0.7 + instanceMatrix[3].z*0.5) * position.y * position.y * 0.55; transformed.z += cos(uTime*1.3 + instanceMatrix[3].z*0.6) * position.y * position.y * 0.3;');
-  };
-  const N = 52000, grass = new THREE.InstancedMesh(geo, mat, N), c = new THREE.Color(), clumps = Array.from({ length: 1300 }, () => [(rnd() - 0.5) * 2 * (H - 3), (rnd() - 0.5) * 2 * (H - 3)]);
-  const gauss = () => (rnd() + rnd() + rnd() - 1.5) * 1.4;
-  for (let i = 0; i < N; i++) {
-    let x, z; do {
-      if (rnd() < 0.8) { const cl = clumps[Math.floor(rnd() * clumps.length)]; x = cl[0] + gauss() * 1.6; z = cl[1] + gauss() * 1.6; } else { x = (rnd() - 0.5) * 2 * (H - 2); z = (rnd() - 0.5) * 2 * (H - 2); }
-    } while (Math.abs(x) > H - 2 || Math.abs(z) > H - 2 || Math.hypot(x, z) < 6.5 || Math.hypot(x - 20, z + 16) < 3.6);
-    const sc = 0.45 + Math.pow(rnd(), 1.7) * 1.6; dummy.position.set(x, hAt(x, z), z); dummy.rotation.set((rnd() - 0.5) * 0.35, rnd() * 6.283, (rnd() - 0.5) * 0.35);
-    dummy.scale.set(0.8 + rnd() * 0.9, sc, 1); dummy.updateMatrix(); grass.setMatrixAt(i, dummy.matrix);
-    if (rnd() < 0.1) c.setRGB(1.25, 1.05, 0.55); else c.setRGB(0.75 + rnd() * 0.5, 0.85 + rnd() * 0.3, 0.65 + rnd() * 0.4); grass.setColorAt(i, c);   // a few dry yellow blades
-  }
-  window.grassMesh = grass; surface.add(grass);
-}
+// (no grass: the ground is bare soil with clover, broadleaf plants, flowers and ferns)
 { // flowers of several colours, in clusters, on stems of different heights
   const NF = 900, stemG = new THREE.CylinderGeometry(0.022, 0.034, 1, 5).translate(0, 0.5, 0), petG = new THREE.CircleGeometry(0.36, 10).rotateX(-PI / 2), cenG = new THREE.SphereGeometry(0.12, 8, 6);
   const stems = new THREE.InstancedMesh(stemG, new THREE.MeshStandardMaterial({ color: 0x3f7f30, roughness: 0.8 }), NF);
