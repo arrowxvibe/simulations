@@ -771,7 +771,8 @@ const md = { g: new THREE.Group(), servos: 0, pos: new THREE.Vector3(-30, 0, 18)
   md.g.add(md.cam.clone()); md.label = makeLabel('Microduck (Pollen Robotics + Hugging Face)', '#ffe0b0');
   md.g.scale.setScalar(1); md.g.updateMatrixWorld(true);
   const baseH = new THREE.Box3().setFromObject(md.g).getSize(new THREE.Vector3()).y, BOY_H = 3.9;
-  md.height = 0.4 * BOY_H; md.g.scale.setScalar(md.height / baseH); md.g.position.copy(md.pos);   // relative to the boy: 25 cm against a person of about 1.65 m scene.add(md.g);
+  md.height = 0.4 * BOY_H; md.g.scale.setScalar(md.height / baseH); md.g.position.copy(md.pos);   // relative to the boy: 25 cm against a person of about 1.65 m
+  scene.add(md.g); scene.add(md.g);
 }
 function mdPick() { const lim = H - 14; md.wp.set(clamp(md.pos.x + (rnd() - 0.5) * 18, -lim, lim), 0, clamp(md.pos.z + (rnd() - 0.5) * 18, -lim, lim)); }   // it wanders locally: it is small
 mdPick();
